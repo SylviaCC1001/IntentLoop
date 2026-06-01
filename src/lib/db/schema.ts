@@ -38,6 +38,7 @@ export const projects = sqliteTable("projects", {
 //   md      - 在线编辑的 Markdown 文档
 //   html    - 单文件 HTML 原型
 //   html-zip - 多文件 HTML 原型(zip 上传)
+//   appendix - 附录说明附件(不展示历史版本)
 // status:
 //   draft     - 草稿
 //   reviewing - 评审中
@@ -49,7 +50,7 @@ export const documents = sqliteTable("documents", {
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
-  type: text("type", { enum: ["md", "html", "html-zip"] }).notNull(),
+  type: text("type", { enum: ["md", "html", "html-zip", "appendix"] }).notNull(),
   status: text("status", {
     enum: ["draft", "reviewing", "published", "archived"],
   })
@@ -117,7 +118,7 @@ export const comments = sqliteTable("comments", {
     .$type<CommentAnchor>()
     .notNull(),
   body: text("body").notNull(),
-  status: text("status", { enum: ["open", "resolved"] })
+  status: text("status", { enum: ["open", "handled", "closed", "resolved"] })
     .notNull()
     .default("open"),
   // 评论是否已"漂移"到了新版本但找不到锚点
@@ -146,7 +147,26 @@ export type CommentAnchor =
       selector: string; // 例如 'button#login'
       textHash: string;
       preview: string;
+      kind?: "selection" | "prototype-rect" | "prototype-element";
+      blockId?: string;
+      selectedText?: string;
+      startOffset?: number;
+      endOffset?: number;
+      pagePath?: string;
+      viewKey?: string;
+      pageKey?: string;
+      viewport?: { w: number; h: number };
       bbox?: { x: number; y: number; w: number; h: number }; // iframe 内坐标(可选)
+      domAnchor?: {
+        selector: string;
+        xpath?: string;
+        tagName: string;
+        id?: string;
+        className?: string;
+        role?: string;
+        text?: string;
+        fingerprint: string;
+      };
     };
 
 // ========== 状态变更日志 ==========

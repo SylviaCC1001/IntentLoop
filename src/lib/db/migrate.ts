@@ -2,9 +2,9 @@
  * 数据库迁移脚本 - 直接建表(MVP 用 push,不走 drizzle migration 文件)
  * 运行: npx tsx src/lib/db/migrate.ts
  */
-import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { NodeSqliteDatabase } from "./node-sqlite";
 
 const dataDir = process.env.DATA_DIR || "./data";
 const dbPath = process.env.DATABASE_URL || path.join(dataDir, "prd.db");
@@ -13,9 +13,10 @@ fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(path.join(dataDir, "repos"), { recursive: true });
 fs.mkdirSync(path.join(dataDir, "prototypes"), { recursive: true });
 
-const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+const db = new NodeSqliteDatabase(dbPath);
+db.exec("PRAGMA busy_timeout = 10000");
+db.exec("PRAGMA journal_mode = WAL");
+db.exec("PRAGMA foreign_keys = ON");
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (

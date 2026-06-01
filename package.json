@@ -6,17 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "test:db": "tsx src/lib/db/smoke.ts",
+    "test:comments": "tsx src/lib/comments/smoke.ts",
+    "test:prototype-annotations": "tsx src/lib/prototype-annotations/smoke.ts",
+    "test:proto": "tsx src/app/proto/smoke.ts",
+    "test:pages": "tsx src/app/pages-smoke.ts",
+    "test:smoke": "npm run test:db && npm run test:comments && npm run test:proto && npm run test:prototype-annotations",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/lib/db/migrate.ts",
     "db:seed": "tsx src/lib/db/seed.ts",
     "setup": "npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
-    "next": "15.0.3",
-    "react": "19.0.0-rc-65a56d0e-20241020",
-    "react-dom": "19.0.0-rc-65a56d0e-20241020",
-    "better-sqlite3": "^11.5.0",
+    "next": "15.5.18",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
     "drizzle-orm": "^0.36.4",
     "bcryptjs": "^2.4.3",
     "jose": "^5.9.6",
@@ -41,9 +46,8 @@
   "devDependencies": {
     "typescript": "^5.6.3",
     "@types/node": "^22.9.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/adm-zip": "^0.5.6",
     "@types/uuid": "^10.0.0",
@@ -54,6 +58,6 @@
     "drizzle-kit": "^0.28.1",
     "tsx": "^4.19.2",
     "eslint": "^9.14.0",
-    "eslint-config-next": "15.0.3"
+    "eslint-config-next": "15.5.18"
   }
 }

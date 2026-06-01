@@ -1,8 +1,7 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import path from "path";
 import fs from "fs";
+import { drizzleNodeSqlite, NodeSqliteDatabase } from "./node-sqlite";
 
 // 确保 data 目录存在
 const dataDir = process.env.DATA_DIR || "./data";
@@ -13,10 +12,11 @@ fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(path.join(dataDir, "repos"), { recursive: true });
 fs.mkdirSync(path.join(dataDir, "prototypes"), { recursive: true });
 
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+const sqlite = new NodeSqliteDatabase(dbPath);
+sqlite.exec("PRAGMA busy_timeout = 10000");
+sqlite.exec("PRAGMA journal_mode = WAL");
+sqlite.exec("PRAGMA foreign_keys = ON");
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzleNodeSqlite(sqlite, { schema });
 export { schema };
 export default db;
