@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import "highlight.js/styles/github.css";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

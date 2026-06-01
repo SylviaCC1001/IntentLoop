@@ -19,12 +19,38 @@ const anchorSchema: z.ZodType<CommentAnchor> = z.union([
     selector: z.string(),
     textHash: z.string(),
     preview: z.string(),
+    kind: z.enum(["selection", "prototype-rect", "prototype-element"]).optional(),
+    blockId: z.string().optional(),
+    selectedText: z.string().optional(),
+    startOffset: z.number().int().nonnegative().optional(),
+    endOffset: z.number().int().nonnegative().optional(),
+    pagePath: z.string().optional(),
+    viewKey: z.string().optional(),
+    pageKey: z.string().optional(),
+    viewport: z
+      .object({
+        w: z.number().positive(),
+        h: z.number().positive(),
+      })
+      .optional(),
     bbox: z
       .object({
         x: z.number(),
         y: z.number(),
         w: z.number(),
         h: z.number(),
+      })
+      .optional(),
+    domAnchor: z
+      .object({
+        selector: z.string(),
+        xpath: z.string().optional(),
+        tagName: z.string(),
+        id: z.string().optional(),
+        className: z.string().optional(),
+        role: z.string().optional(),
+        text: z.string().optional(),
+        fingerprint: z.string(),
       })
       .optional(),
   }),

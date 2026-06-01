@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --card: #f8fafc;
-  --border: #e2e8f0;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --primary: #6366f1;
+  --background: #f6f8fb;
+  --foreground: #172033;
+  --card: #ffffff;
+  --border: #dbe3ee;
+  --muted: #eef3f7;
+  --muted-foreground: #627086;
+  --primary: #3157d5;
   --primary-foreground: #ffffff;
-  --accent: #f0f0ff;
+  --accent: #eaf0ff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -33,6 +33,24 @@ body {
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+::selection {
+  background: rgba(49, 87, 213, 0.18);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  outline-color: var(--primary);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b8c4d6 transparent;
 }
 
 /* Markdown 渲染样式 */
@@ -85,4 +103,9 @@ body {
 /* Mermaid 图表容器 */
 .mermaid {
   @apply my-4 flex justify-center;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
 }

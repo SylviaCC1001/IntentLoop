@@ -5,6 +5,8 @@ import { genId } from "@/lib/utils";
 import { commit } from "@/lib/git";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
 
 const createSchema = z.object({
   content: z.string(),
@@ -60,6 +62,7 @@ export async function POST(
       );
     }
 
+    const versionId = genId();
     const filename = doc.type === "md" ? "content.md" : "index.html";
     const sha = await commit(
       id,
@@ -68,13 +71,22 @@ export async function POST(
       { name: user.displayName, email: user.email }
     );
 
-    const versionId = genId();
+    let storagePath: string | null = null;
+    if (doc.type === "html") {
+      const dataDir = process.env.DATA_DIR || "./data";
+      const targetDir = path.join(dataDir, "prototypes", id, versionId);
+      fs.mkdirSync(targetDir, { recursive: true });
+      fs.writeFileSync(path.join(targetDir, "index.html"), content, "utf-8");
+      storagePath = path.posix.join(id, versionId, "index.html");
+    }
+
     db.insert(schema.versions).values({
       id: versionId,
       documentId: id,
       commitSha: sha,
       message: message || "",
       content,
+      storagePath,
       size: Buffer.byteLength(content, "utf-8"),
       createdBy: user.id,
     }).run();
