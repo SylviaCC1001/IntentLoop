@@ -28,8 +28,8 @@ import {
   Undo2,
 } from "lucide-react";
 
-const PROTOTYPE_AGENT_SOURCE = "prd-hub-prototype-agent";
-const PROTOTYPE_HOST_SOURCE = "prd-hub-prototype-host";
+const PROTOTYPE_AGENT_SOURCE = "intentloop-prototype-agent";
+const PROTOTYPE_HOST_SOURCE = "intentloop-prototype-host";
 const PROTOTYPE_VIEWPORT = { width: 1366, height: 768 };
 
 type PrototypeAgentMessage =
@@ -130,6 +130,7 @@ export type PrototypeSandboxComment = {
 type PrototypeSandboxProps = {
   documentId: string;
   title: string;
+  mode?: "preview" | "review";
   selectedVersionId: string | null;
   selectedVersionSize: number | null;
   previewUrl: string;
@@ -187,6 +188,7 @@ function safeDownloadName(value: string) {
 export default function PrototypeSandbox({
   documentId,
   title,
+  mode = "review",
   selectedVersionId,
   selectedVersionSize,
   previewUrl,
@@ -230,6 +232,7 @@ export default function PrototypeSandbox({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [editError, setEditError] = useState("");
+  const reviewEnabled = mode === "review";
 
   useEffect(() => {
     setAnnotating(false);
@@ -246,6 +249,18 @@ export default function PrototypeSandbox({
     setEditError("");
     setReviewLayerVisible(false);
   }, [selectedVersionId, previewUrl, previewHtml]);
+
+  useEffect(() => {
+    if (!reviewEnabled) {
+      setAnnotating(false);
+      setTextEditEnabled(false);
+      setTextEditDirtyCount(0);
+      setReviewLayerVisible(false);
+      setCommentPanelOpen(false);
+      setHoverTarget(null);
+      clearDraftAnnotation();
+    }
+  }, [reviewEnabled]);
 
   const postToFrame = useCallback((message: Record<string, unknown>) => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -345,6 +360,7 @@ export default function PrototypeSandbox({
           return;
 
         case "select":
+          if (!reviewEnabled) return;
           if (!isPrototypeElementHit(message.target)) return;
           setDraftTarget(message.target);
           setHoverTarget(null);
@@ -360,6 +376,7 @@ export default function PrototypeSandbox({
     return () => window.removeEventListener("message", handlePrototypeMessage);
   }, [
     annotating,
+    reviewEnabled,
     setFrameAnnotationEnabled,
     setFrameTextEditEnabled,
     syncCommentsToFrame,
@@ -611,9 +628,6 @@ export default function PrototypeSandbox({
     }
   }
 
-  const selectedVersion = versions.find(
-    (version) => version.id === selectedVersionId
-  );
   const visibleMarkers = resolvedMarkers
     .flatMap((marker) => {
       const comment = comments.find((item) => item.id === marker.id);
@@ -626,26 +640,27 @@ export default function PrototypeSandbox({
   const hoverRect = annotating && !draftTarget ? hoverTarget?.rect ?? null : null;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card">
+    <section
+      data-prototype-sandbox-mode={mode}
+      className="overflow-hidden rounded-lg border border-border bg-card"
+    >
       <div className="flex flex-col gap-3 border-b border-border px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-sm font-medium">原型沙盘</h2>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {title}
-            {selectedVersion ? ` · ${selectedVersion.message || "未填写更新说明"}` : ""}
-            {selectedVersionSize !== null ? ` · ${formatSize(selectedVersionSize)}` : ""}
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <h2 className="shrink-0 text-sm font-semibold">
+            {reviewEnabled ? "原型评审" : "原型预览"}
+          </h2>
+          <span className="truncate text-xs text-muted-foreground">{title}</span>
+          {selectedVersionSize !== null && (
+            <span className="hidden rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground md:inline-flex">
+              {formatSize(selectedVersionSize)}
+            </span>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <label
-            htmlFor="prototype-version-select"
-            className="text-xs font-medium text-muted-foreground"
-          >
-            版本切换
-          </label>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <select
             id="prototype-version-select"
+            aria-label="版本切换"
             value={selectedVersionId ?? ""}
             onChange={(event) => {
               const next = versions.find(
@@ -659,7 +674,7 @@ export default function PrototypeSandbox({
               }
             }}
             disabled={versions.length === 0}
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+            className="h-8 max-w-[300px] rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           >
             {versions.length === 0 ? (
               <option value="">暂无版本</option>
@@ -673,140 +688,148 @@ export default function PrototypeSandbox({
             )}
           </select>
 
-          <button
-            type="button"
-            onClick={() => {
-              setEditError("");
-              setTextEditEnabled((value) => {
-                const next = !value;
-                if (next) {
-                  setAnnotating(false);
-                  setHoverTarget(null);
-                  setReviewLayerVisible(false);
-                }
-                return next;
-              });
-            }}
-            disabled={!selectedVersionId}
-            aria-pressed={textEditEnabled}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium disabled:opacity-50 ${
-              textEditEnabled
-                ? "border-primary bg-accent text-primary"
-                : "border-border hover:bg-muted"
-            }`}
-            title="编辑模式"
-          >
-            <PencilLine size={15} />
-            {textEditEnabled ? "正在编辑" : "编辑模式"}
-          </button>
+          {reviewEnabled && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditError("");
+                  setTextEditEnabled((value) => {
+                    const next = !value;
+                    if (next) {
+                      setAnnotating(false);
+                      setHoverTarget(null);
+                      setReviewLayerVisible(false);
+                    }
+                    return next;
+                  });
+                }}
+                disabled={!selectedVersionId}
+                aria-pressed={textEditEnabled}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium disabled:opacity-50 ${
+                  textEditEnabled
+                    ? "border-primary bg-accent text-primary"
+                    : "border-border hover:bg-muted"
+                }`}
+                title="编辑原型文案"
+              >
+                <PencilLine size={14} />
+                {textEditEnabled ? "编辑中" : "编辑"}
+              </button>
 
-          {textEditDirtyCount > 0 && (
-            <span className="inline-flex h-9 items-center rounded-md border border-border bg-muted px-2.5 text-xs text-muted-foreground">
-              已修改 {textEditDirtyCount} 处
-            </span>
+              {(textEditEnabled || textEditDirtyCount > 0) && (
+                <>
+                  {textEditDirtyCount > 0 && (
+                    <span className="inline-flex h-8 items-center rounded-md border border-border bg-muted px-2 text-xs text-muted-foreground">
+                      {textEditDirtyCount} 处修改
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={saveEditedHtmlVersion}
+                    disabled={
+                      !selectedVersionId ||
+                      (!textEditDirtyCount && !textEditEnabled) ||
+                      savingHtml ||
+                      !canSaveHtmlVersion
+                    }
+                    aria-label="保存新版"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    title={
+                      canSaveHtmlVersion
+                        ? "保存为新的 HTML 版本"
+                        : "多文件 zip 原型暂不支持直接保存新版"
+                    }
+                  >
+                    {savingHtml ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={exportEditedHtml}
+                    disabled={
+                      !selectedVersionId ||
+                      (!textEditDirtyCount && !textEditEnabled) ||
+                      exportingHtml
+                    }
+                    aria-label="导出 HTML"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    title="导出当前编辑后的 HTML"
+                  >
+                    {exportingHtml ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={refreshPreview}
+                    disabled={!selectedVersionId || (!textEditDirtyCount && !textEditEnabled)}
+                    aria-label="放弃修改"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                    title="放弃本次文本修改"
+                  >
+                    <Undo2 size={14} />
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setAnnotating((value) => {
+                    const next = !value;
+                    if (next) {
+                      setTextEditEnabled(false);
+                      setReviewLayerVisible(true);
+                    } else {
+                      setHoverTarget(null);
+                    }
+                    return next;
+                  });
+                }}
+                disabled={!selectedVersionId}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium disabled:opacity-50 ${
+                  annotating
+                    ? "border-primary bg-accent text-primary"
+                    : "border-border hover:bg-muted"
+                }`}
+                title="元素标注"
+              >
+                <MousePointer2 size={14} />
+                {annotating ? "标注中" : "标注"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setReviewLayerVisible((value) => !value)}
+                disabled={!selectedVersionId || (comments.length === 0 && !draftTarget)}
+                aria-label={reviewLayerVisible ? "隐藏标注" : "显示标注"}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md border disabled:opacity-50 ${
+                  reviewLayerVisible
+                    ? "border-border bg-muted text-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+                title={reviewLayerVisible ? "隐藏标注" : "显示标注"}
+              >
+                {reviewLayerVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </>
           )}
 
           <button
             type="button"
-            onClick={saveEditedHtmlVersion}
-            disabled={
-              !selectedVersionId ||
-              (!textEditDirtyCount && !textEditEnabled) ||
-              savingHtml ||
-              !canSaveHtmlVersion
-            }
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
-            title={
-              canSaveHtmlVersion
-                ? "保存为新的 HTML 版本"
-                : "多文件 zip 原型暂不支持直接保存新版"
-            }
-          >
-            {savingHtml ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            保存新版
-          </button>
-
-          <button
-            type="button"
-            onClick={exportEditedHtml}
-            disabled={
-              !selectedVersionId ||
-              (!textEditDirtyCount && !textEditEnabled) ||
-              exportingHtml
-            }
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
-            title="导出当前编辑后的 HTML"
-          >
-            {exportingHtml ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <Download size={15} />
-            )}
-            导出 HTML
-          </button>
-
-          <button
-            type="button"
-            onClick={refreshPreview}
-            disabled={!selectedVersionId || (!textEditDirtyCount && !textEditEnabled)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
-            title="放弃本次文本修改"
-          >
-            <Undo2 size={15} />
-            放弃修改
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setError("");
-              setAnnotating((value) => {
-                const next = !value;
-                if (next) {
-                  setTextEditEnabled(false);
-                  setReviewLayerVisible(true);
-                } else {
-                  setHoverTarget(null);
-                }
-                return next;
-              });
-            }}
-            disabled={!selectedVersionId}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium disabled:opacity-50 ${
-              annotating
-                ? "border-primary bg-accent text-primary"
-                : "border-border hover:bg-muted"
-            }`}
-            title="标注模式"
-          >
-            <MousePointer2 size={15} />
-            {annotating ? "正在注释" : "标注模式"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setReviewLayerVisible((value) => !value)}
-            disabled={!selectedVersionId || (comments.length === 0 && !draftTarget)}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium disabled:opacity-50 ${
-              reviewLayerVisible
-                ? "border-border bg-muted"
-                : "border-border hover:bg-muted"
-            }`}
-            title={reviewLayerVisible ? "隐藏标注" : "显示标注"}
-          >
-            {reviewLayerVisible ? <EyeOff size={15} /> : <Eye size={15} />}
-            {reviewLayerVisible ? "隐藏标注" : "显示标注"}
-          </button>
-
-          <button
-            type="button"
             onClick={refreshPreview}
             disabled={!selectedVersionId}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            aria-label="刷新预览"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
             title="刷新"
           >
-            <RefreshCw size={15} />
-            刷新
+            <RefreshCw size={14} />
           </button>
 
           {previewUrl ? (
@@ -814,21 +837,21 @@ export default function PrototypeSandbox({
               href={previewUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium hover:bg-muted"
               title="新窗口打开"
             >
-              <ExternalLink size={15} />
-              新窗口打开
+              <ExternalLink size={14} />
+              打开
             </a>
           ) : (
             <button
               type="button"
               disabled
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium opacity-50"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium opacity-50"
               title="新窗口打开"
             >
-              <ExternalLink size={15} />
-              新窗口打开
+              <ExternalLink size={14} />
+              打开
             </button>
           )}
 
@@ -836,10 +859,10 @@ export default function PrototypeSandbox({
             type="button"
             onClick={enterFullscreen}
             disabled={!selectedVersionId}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
             title="全屏"
           >
-            <Maximize2 size={15} />
+            <Maximize2 size={14} />
             全屏
           </button>
         </div>
@@ -852,12 +875,16 @@ export default function PrototypeSandbox({
       )}
 
       <div
-        data-prototype-comment-panel={commentPanelOpen ? "open" : "collapsed"}
+        data-prototype-comment-panel={
+          reviewEnabled ? (commentPanelOpen ? "open" : "collapsed") : "hidden"
+        }
         data-prototype-viewport={`${PROTOTYPE_VIEWPORT.width}x${PROTOTYPE_VIEWPORT.height}`}
-        className={`grid min-h-[800px] ${
-          commentPanelOpen
-            ? "xl:grid-cols-[minmax(0,1fr)_320px]"
-            : "xl:grid-cols-[minmax(0,1fr)_56px]"
+        className={`grid min-h-[760px] ${
+          reviewEnabled
+            ? commentPanelOpen
+              ? "xl:grid-cols-[minmax(0,1fr)_320px]"
+              : "xl:grid-cols-[minmax(0,1fr)_56px]"
+            : "grid-cols-1"
         }`}
       >
         <div className="min-w-0 bg-slate-100 p-4">
@@ -882,7 +909,7 @@ export default function PrototypeSandbox({
                 className="h-full w-full bg-white"
               />
 
-          {reviewLayerVisible && visibleMarkers.map(({ marker, comment }, index) => {
+          {reviewEnabled && reviewLayerVisible && visibleMarkers.map(({ marker, comment }, index) => {
             const rect = marker.target.rect;
             return (
               <button
@@ -903,7 +930,7 @@ export default function PrototypeSandbox({
             );
           })}
 
-          {hoverRect && (
+          {reviewEnabled && hoverRect && (
             <div
               data-prototype-element-hover="true"
               className="pointer-events-none absolute z-10 rounded border-2 border-primary/80 bg-primary/5"
@@ -918,7 +945,7 @@ export default function PrototypeSandbox({
             </div>
           )}
 
-          {reviewLayerVisible && draftRect && (
+          {reviewEnabled && reviewLayerVisible && draftRect && (
             <div
               data-prototype-comment-draft="true"
               className="pointer-events-none absolute z-10 rounded border-2 border-primary bg-primary/10"
@@ -929,6 +956,7 @@ export default function PrototypeSandbox({
           </div>
         </div>
 
+        {reviewEnabled && (
         <aside className="flex min-h-0 flex-col border-t border-border bg-muted/20 xl:border-l xl:border-t-0">
           {!commentPanelOpen ? (
             <div className="flex h-full items-start justify-center bg-card p-2">
@@ -950,7 +978,7 @@ export default function PrototypeSandbox({
           ) : (
             <>
           <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
-            <h3 className="text-base font-medium">原型评审（{comments.length}）</h3>
+            <h3 className="text-sm font-semibold">评论 {comments.length}</h3>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -962,7 +990,7 @@ export default function PrototypeSandbox({
                 {reviewLayerVisible ? "隐藏" : "显示"}
               </button>
               <span className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">
-                {annotating ? "正在注释" : "浏览中"}
+                {annotating ? "标注中" : "浏览"}
               </span>
               <button
                 type="button"
@@ -1029,7 +1057,7 @@ export default function PrototypeSandbox({
               </div>
             ) : (
               <div className="rounded-md border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-                元素命中标注：打开标注模式后，悬停页面元素会自动框选，点击元素后添加评论。
+                开启标注后，点击元素添加评论。
               </div>
             )}
 
@@ -1113,6 +1141,7 @@ export default function PrototypeSandbox({
             </>
           )}
         </aside>
+        )}
       </div>
     </section>
   );

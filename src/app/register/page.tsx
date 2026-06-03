@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ProductLogo from "@/components/ProductLogo";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -41,7 +42,11 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">PRD Hub</h1>
+          <ProductLogo
+            className="mb-2 justify-center gap-3"
+            markClassName="h-10 w-10 rounded-lg"
+            wordmarkClassName="text-3xl font-bold"
+          />
           <p className="text-muted-foreground">创建账号</p>
         </div>
 

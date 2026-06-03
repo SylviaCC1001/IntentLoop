@@ -10,6 +10,16 @@ fs.writeFileSync(
   "<!doctype html><title>Prototype</title><body><button id=\"go\">Go</button></body>",
   "utf-8"
 );
+fs.writeFileSync(
+  path.join(prototypeDir, "gbk.html"),
+  Buffer.concat([
+    Buffer.from('<!doctype html><meta charset="gbk"><title>', "ascii"),
+    Buffer.from([0xb2, 0xe5, 0xbc, 0xfe, 0xca, 0xd0, 0xb3, 0xa1]),
+    Buffer.from("</title><body>", "ascii"),
+    Buffer.from([0xb2, 0xe5, 0xbc, 0xfe, 0xca, 0xd0, 0xb3, 0xa1]),
+    Buffer.from("</body>", "ascii"),
+  ])
+);
 process.env.DATA_DIR = smokeDataDir;
 
 async function main() {
@@ -40,7 +50,7 @@ async function main() {
     "set-text-edit-enabled",
     "text-edit-dirty",
     "serialize-html",
-    "data-prd-hub-agent-script",
+    "data-intentloop-agent-script",
   ]) {
     if (!body.includes(marker)) {
       throw new Error(`Expected injected agent script to include ${marker}`);
@@ -51,6 +61,17 @@ async function main() {
   }
   if (!body.includes('replace(/[^a-zA-Z0-9_-]/g, "\\\\$&")')) {
     throw new Error("Expected CSS.escape fallback to remain executable");
+  }
+
+  const gbkResponse = await GET(new Request("http://localhost/proto/doc/version/gbk.html"), {
+    params: Promise.resolve({ path: ["doc", "version", "gbk.html"] }),
+  });
+  const gbkBody = await gbkResponse.text();
+  if (!gbkBody.includes("插件市场")) {
+    throw new Error("Expected GBK prototype HTML to be decoded before injection");
+  }
+  if (gbkBody.includes("����")) {
+    throw new Error("Expected GBK prototype HTML to avoid replacement-character mojibake");
   }
 
   const blocked = await GET(new Request("http://localhost/proto/..%2F.env"), {

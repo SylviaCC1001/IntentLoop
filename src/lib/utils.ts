@@ -1,5 +1,14 @@
 import { v4 as uuid } from "uuid";
 import { hash } from "bcryptjs";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+/**
+ * 合并 className,shadcn 标准 cn 工具
+ */
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 /**
  * 生成唯一 ID

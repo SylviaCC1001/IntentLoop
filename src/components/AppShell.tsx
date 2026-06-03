@@ -11,6 +11,7 @@ import {
   Trello,
 } from "lucide-react";
 import type { User } from "@/lib/db/schema";
+import ProductLogo from "@/components/ProductLogo";
 
 export default function AppShell({
   user,
@@ -46,27 +47,28 @@ export default function AppShell({
       >
         <div className="border-b border-border p-3">
           <div className="flex items-center justify-between gap-2">
-          <Link
-            href="/projects"
-            className={`flex min-w-0 items-center gap-2 ${
-              collapsed ? "justify-center" : ""
-            }`}
-            title="PRD Hub"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground shadow-sm shadow-primary/20">
-              P
-            </div>
-            {!collapsed && <span className="truncate font-semibold">PRD Hub</span>}
-          </Link>
-          <button
-            type="button"
-            onClick={() => setCollapsed((value) => !value)}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label={collapsed ? "展开导航" : "收起导航"}
-            title={collapsed ? "展开导航" : "收起导航"}
-          >
-            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </button>
+            <Link
+              href="/projects"
+              className={`flex min-w-0 items-center gap-2 ${
+                collapsed ? "justify-center" : ""
+              }`}
+              title="IntentLoop"
+            >
+              <ProductLogo showWordmark={!collapsed} />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setCollapsed((value) => !value)}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label={collapsed ? "展开导航" : "收起导航"}
+              title={collapsed ? "展开导航" : "收起导航"}
+            >
+              {collapsed ? (
+                <PanelLeftOpen size={16} />
+              ) : (
+                <PanelLeftClose size={16} />
+              )}
+            </button>
           </div>
         </div>
 

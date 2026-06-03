@@ -22,6 +22,9 @@ export const projects = sqliteTable("projects", {
   name: text("name").notNull(),
   description: text("description"),
   color: text("color").notNull().default("#6366f1"), // 项目主色
+  status: text("status", { enum: ["draft", "reviewed", "revised"] })
+    .notNull()
+    .default("draft"), // 方案状态:起草中/已评审/新修订
   createdBy: text("created_by")
     .notNull()
     .references(() => users.id),

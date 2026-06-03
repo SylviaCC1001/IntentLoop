@@ -33,16 +33,67 @@ function prototypeSrc(storagePath: string | null | undefined) {
   return `/proto/${normalized}`;
 }
 
-function prototypeModeHref(documentId: string, mode: "review" | "joint", versionId?: string | null) {
+function prototypeModeHref(
+  documentId: string,
+  mode: "preview" | "review" | "joint",
+  versionId?: string | null
+) {
   const params = new URLSearchParams();
-  if (mode === "joint") {
-    params.set("mode", "joint");
-  }
+  params.set("mode", mode);
   if (versionId) {
     params.set("version", versionId);
   }
   const query = params.toString();
   return query ? `/docs/${documentId}?${query}` : `/docs/${documentId}`;
+}
+
+function ReviewScopeNav({
+  jointHref,
+  prdHref,
+  prototypeHref,
+  active,
+}: {
+  jointHref?: string | null;
+  prdHref?: string | null;
+  prototypeHref?: string | null;
+  active: "joint" | "prd" | "html";
+}) {
+  const items = [
+    { key: "joint" as const, label: "联合评审", href: jointHref },
+    { key: "prd" as const, label: "需求评审", href: prdHref },
+    { key: "html" as const, label: "原型评审", href: prototypeHref },
+  ];
+
+  return (
+    <nav
+      data-review-scope-switcher="true"
+      className="inline-flex rounded-lg border border-border bg-card p-1"
+    >
+      {items.map((item) => {
+        const className = `rounded-md px-3 py-1.5 text-sm font-medium ${
+          active === item.key
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground"
+        }`;
+        if (!item.href) {
+          return (
+            <span
+              key={item.key}
+              aria-disabled="true"
+              className={`${className} cursor-not-allowed opacity-40`}
+            >
+              {item.label}
+            </span>
+          );
+        }
+        return (
+          <Link key={item.key} href={item.href} className={className}>
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
 
 function textHash(value: string) {
@@ -93,8 +144,10 @@ export default async function DocumentDetailPage({
   const mode =
     query.mode === "joint" && isPrototypeDocument
       ? "joint"
-      : query.mode === "review" || isPrototypeDocument
+      : query.mode === "review"
         ? "review"
+        : isPrototypeDocument
+          ? "preview"
         : "edit";
 
   const project = db
@@ -102,19 +155,20 @@ export default async function DocumentDetailPage({
     .from(schema.projects)
     .where(eq(schema.projects.id, document.projectId))
     .get();
+  const projectDocuments = db
+    .select()
+    .from(schema.documents)
+    .where(eq(schema.documents.projectId, document.projectId))
+    .orderBy(desc(schema.documents.updatedAt))
+    .all();
   const linkedPrdDocument = isPrototypeDocument
-    ? db
-        .select()
-        .from(schema.documents)
-        .where(
-          and(
-            eq(schema.documents.projectId, document.projectId),
-            eq(schema.documents.type, "md")
-          )
-        )
-        .orderBy(desc(schema.documents.updatedAt))
-        .get()
-    : null;
+    ? projectDocuments.find((item) => item.type === "md") ?? null
+    : document.type === "md"
+      ? document
+      : null;
+  const linkedPrototypeDocument = isPrototypeDocument
+    ? document
+    : projectDocuments.find((item) => item.type === "html" || item.type === "html-zip") ?? null;
   const linkedPrdVersion = linkedPrdDocument?.currentVersionId
     ? db
         .select()
@@ -141,6 +195,13 @@ export default async function DocumentDetailPage({
     document.type !== "md" && query.version
       ? versions.find((version) => version.id === query.version) ?? currentVersion
       : currentVersion;
+  const linkedPrototypeVersion = linkedPrototypeDocument?.currentVersionId
+    ? db
+        .select()
+        .from(schema.versions)
+        .where(eq(schema.versions.id, linkedPrototypeDocument.currentVersionId))
+        .get()
+    : null;
   const commentVersion =
     document.type === "md" ? currentVersion : selectedPrototypeVersion;
   const comments = commentVersion
@@ -165,18 +226,23 @@ export default async function DocumentDetailPage({
   );
   const Icon = document.type === "md" ? FileText : FileCode2;
   const protoSrc = prototypeSrc(selectedPrototypeVersion?.storagePath);
-  const editHref = `/docs/${document.id}?mode=edit`;
-  const reviewHref = `/docs/${document.id}?mode=review`;
-  const prototypeReviewHref = prototypeModeHref(
-    document.id,
-    "review",
-    selectedPrototypeVersion?.id
-  );
-  const jointReviewHref = prototypeModeHref(
-    document.id,
-    "joint",
-    selectedPrototypeVersion?.id
-  );
+  const scopePrdHref = linkedPrdDocument ? `/docs/${linkedPrdDocument.id}?mode=review` : null;
+  const scopePrototypeHref = linkedPrototypeDocument
+    ? prototypeModeHref(
+        linkedPrototypeDocument.id,
+        "review",
+        isPrototypeDocument ? selectedPrototypeVersion?.id : linkedPrototypeVersion?.id
+      )
+    : null;
+  const scopeJointHref = linkedPrdDocument && linkedPrototypeDocument
+    ? prototypeModeHref(
+        linkedPrototypeDocument.id,
+        "joint",
+        isPrototypeDocument ? selectedPrototypeVersion?.id : linkedPrototypeVersion?.id
+      )
+    : null;
+  const scopeActive =
+    document.type === "md" ? "prd" : mode === "joint" ? "joint" : "html";
   const mappedComments = comments.map((comment) => ({
     id: comment.id,
     body: comment.body,
@@ -233,54 +299,14 @@ export default async function DocumentDetailPage({
           </div>
         </div>
 
-        {document.type === "md" && (
-          <nav className="inline-flex rounded-lg border border-border bg-card p-1">
-            <Link
-              href={editHref}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                mode === "edit"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              编辑
-            </Link>
-            <Link
-              href={reviewHref}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                mode === "review"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              评审
-            </Link>
-          </nav>
-        )}
-
-        {isPrototypeDocument && (
-          <nav className="inline-flex rounded-lg border border-border bg-card p-1">
-            <Link
-              href={prototypeReviewHref}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                mode !== "joint"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              原型评审
-            </Link>
-            <Link
-              href={jointReviewHref}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                mode === "joint"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              联合评审
-            </Link>
-          </nav>
+        {((document.type === "md" && mode === "review") ||
+          (isPrototypeDocument && mode !== "preview")) && (
+          <ReviewScopeNav
+            jointHref={scopeJointHref}
+            prdHref={scopePrdHref}
+            prototypeHref={scopePrototypeHref}
+            active={scopeActive}
+          />
         )}
       </header>
 
@@ -312,11 +338,35 @@ export default async function DocumentDetailPage({
         />
       )}
 
-      {isPrototypeDocument && mode !== "joint" && (
+      {isPrototypeDocument && mode === "preview" && (
+        <PrototypeSandbox
+          documentId={document.id}
+          title={document.title}
+          mode="preview"
+          selectedVersionId={selectedPrototypeVersion?.id ?? null}
+          selectedVersionSize={selectedPrototypeVersion?.size ?? null}
+          previewUrl={protoSrc}
+          previewHtml={selectedPrototypeVersion?.content ?? ""}
+          comments={[]}
+          defaultCommentPanelOpen={false}
+          canSaveHtmlVersion={false}
+          versions={versions.map((version) => ({
+            id: version.id,
+            message: version.message,
+            size: version.size,
+            createdAt: version.createdAt.toISOString(),
+            isCurrent: version.id === document.currentVersionId,
+            href: prototypeModeHref(document.id, "preview", version.id),
+          }))}
+        />
+      )}
+
+      {isPrototypeDocument && mode === "review" && (
         <>
           <PrototypeSandbox
             documentId={document.id}
             title={document.title}
+            mode="review"
             selectedVersionId={selectedPrototypeVersion?.id ?? null}
             selectedVersionSize={selectedPrototypeVersion?.size ?? null}
             previewUrl={protoSrc}
@@ -355,6 +405,7 @@ export default async function DocumentDetailPage({
           <PrototypeSandbox
             documentId={document.id}
             title={document.title}
+            mode="review"
             selectedVersionId={selectedPrototypeVersion?.id ?? null}
             selectedVersionSize={selectedPrototypeVersion?.size ?? null}
             previewUrl={protoSrc}

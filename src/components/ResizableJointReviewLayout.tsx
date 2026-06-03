@@ -10,7 +10,7 @@ import {
 } from "react";
 import MarkdownPreview from "@/components/MarkdownPreview";
 
-const STORAGE_KEY = "prd-hub-joint-prd-width";
+const STORAGE_KEY = "intentloop-joint-prd-width";
 const DEFAULT_WIDTH = 380;
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 680;

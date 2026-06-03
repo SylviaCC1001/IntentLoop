@@ -1,8 +1,18 @@
-# PRD Hub
+# IntentLoop
 
-PRD Hub 是一个本地优先的需求方案托管与评审系统。它把一个需求方案拆成三类核心资产：PRD、交互原型、附录说明，并围绕这些资产提供上传、版本留存、在线预览、编辑发版、评审注释和评审上下文导出能力。
+IntentLoop 是一个本地优先的需求方案托管与评审系统。它把一个需求方案拆成三类核心资产：PRD、交互原型、附录说明，并围绕这些资产提供上传、版本留存、在线预览、编辑发版、评审注释和评审上下文导出能力。
 
 当前项目仍处于本地 MVP 阶段，默认使用 SQLite 和本地文件目录保存数据，不包含多租户、外部分享和细粒度权限系统。
+
+## Windows 笔记本部署
+
+可以把闲置 Windows 笔记本作为单实例服务器使用。部署脚本位于 `scripts/windows`：
+
+- `start-intentloop.ps1`：安装依赖后负责迁移数据库、构建并启动服务。
+- `backup-intentloop.ps1`：打包备份 `DATA_DIR`。
+- `register-startup-task.ps1`：注册 Windows 登录后自启任务。
+
+完整步骤见 [Windows 笔记本部署指南](docs/windows-laptop-deploy.md)。
 
 ## 当前功能
 

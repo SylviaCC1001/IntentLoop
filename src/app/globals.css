@@ -2,29 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Owl Files 风格设计 token
+ * - 柔和低饱和配色（奶油白、灰蓝）
+ * - 大圆角（16/20/24px）
+ * - 轻盈阴影（几乎看不见）
+ * - 微妙渐变背景
+ */
 :root {
-  --background: #f6f8fb;
-  --foreground: #172033;
+  /* color · light */
+  --background: #fafbfc;
+  --foreground: #1a1f2e;
   --card: #ffffff;
-  --border: #dbe3ee;
-  --muted: #eef3f7;
-  --muted-foreground: #627086;
-  --primary: #3157d5;
+  --card-foreground: #1a1f2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1f2e;
+  --border: #e8ecf1;
+  --input: #e8ecf1;
+  --ring: #5b7ff5;
+  --muted: #f4f6f9;
+  --muted-foreground: #6b7785;
+  --primary: #5b7ff5;
   --primary-foreground: #ffffff;
-  --accent: #eaf0ff;
+  --secondary: #f4f6f9;
+  --secondary-foreground: #1a1f2e;
+  --accent: #eff3ff;
+  --accent-foreground: #3d5afe;
+  --destructive: #f04438;
+  --destructive-foreground: #ffffff;
+
+  /* radius - Owl Files 大圆角 */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* shadow - 轻盈投影 */
+  --shadow-1: 0 1px 3px rgba(15, 23, 42, 0.02), 0 1px 2px rgba(15, 23, 42, 0.015);
+  --shadow-2: 0 4px 8px rgba(15, 23, 42, 0.03), 0 2px 4px rgba(15, 23, 42, 0.02);
+  --shadow-3: 0 12px 24px rgba(15, 23, 42, 0.05), 0 4px 8px rgba(15, 23, 42, 0.03);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f172a;
-    --foreground: #f8fafc;
-    --card: #1e293b;
-    --border: #334155;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --primary: #818cf8;
-    --primary-foreground: #0f172a;
-    --accent: #1e1b4b;
+    --background: #0d1117;
+    --foreground: #f0f3f7;
+    --card: #161b22;
+    --card-foreground: #f0f3f7;
+    --popover: #161b22;
+    --popover-foreground: #f0f3f7;
+    --border: #2d333b;
+    --input: #2d333b;
+    --ring: #7c9aff;
+    --muted: #1c2128;
+    --muted-foreground: #8b949e;
+    --primary: #7c9aff;
+    --primary-foreground: #0d1117;
+    --secondary: #1c2128;
+    --secondary-foreground: #f0f3f7;
+    --accent: #1a1f3a;
+    --accent-foreground: #b8c5ff;
+    --destructive: #ff6b6b;
+    --destructive-foreground: #0d1117;
+
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-2: 0 4px 8px rgba(0, 0, 0, 0.25);
+    --shadow-3: 0 12px 24px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -45,7 +88,7 @@ a,
 input,
 textarea,
 select {
-  outline-color: var(--primary);
+  outline-color: var(--ring);
 }
 
 * {
@@ -68,7 +111,7 @@ select {
   @apply border-l-4 border-primary pl-4 italic my-4 text-muted-foreground;
 }
 .prose-prd code {
-  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
+  @apply bg-muted px-1.5 py-0.5 rounded-sm text-sm font-mono;
 }
 .prose-prd pre {
   @apply bg-muted p-4 rounded-lg overflow-x-auto my-4;

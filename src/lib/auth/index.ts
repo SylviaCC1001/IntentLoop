@@ -6,6 +6,10 @@ import type { User } from "@/lib/db/schema";
 
 const SESSION_COOKIE = "prd_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 天
+const COOKIE_SECURE =
+  process.env.COOKIE_SECURE?.toLowerCase() === "false"
+    ? false
+    : process.env.NODE_ENV === "production";
 
 /**
  * 创建 session
@@ -23,7 +27,7 @@ export async function createSession(userId: string): Promise<string> {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, sessionId, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: COOKIE_SECURE,
     sameSite: "lax",
     maxAge: SESSION_MAX_AGE / 1000,
     path: "/",

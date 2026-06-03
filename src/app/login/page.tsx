@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ProductLogo from "@/components/ProductLogo";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -39,8 +40,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">PRD Hub</h1>
-          <p className="text-muted-foreground">登录到你的 PRD 工作台</p>
+          <ProductLogo
+            className="mb-2 justify-center gap-3"
+            markClassName="h-10 w-10 rounded-lg"
+            wordmarkClassName="text-3xl font-bold"
+          />
+          <p className="text-muted-foreground">登录到你的需求评审工作台</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 bg-card p-6 rounded-xl border border-border">

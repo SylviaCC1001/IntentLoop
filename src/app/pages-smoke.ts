@@ -17,6 +17,26 @@ function getDbPath() {
   return process.env.DATABASE_URL || "./data/prd.db";
 }
 
+function assertFloatingActionsRenderThroughPortal() {
+  const portalSource = fs.existsSync("src/components/ClientPortal.tsx")
+    ? fs.readFileSync("src/components/ClientPortal.tsx", "utf-8")
+    : "";
+  if (!portalSource.includes("createPortal") || !portalSource.includes("document.body")) {
+    throw new Error("Expected floating action dialogs to render through a body portal");
+  }
+
+  for (const componentPath of [
+    "src/components/ActionsMenu.tsx",
+    "src/components/ProjectCreateDialog.tsx",
+    "src/components/DocumentCreateDialog.tsx",
+  ]) {
+    const source = fs.readFileSync(componentPath, "utf-8");
+    if (!source.includes("ClientPortal")) {
+      throw new Error(`Expected ${componentPath} to keep dialogs outside hover-hidden card chrome`);
+    }
+  }
+}
+
 function fullMarkdownSmokeContent(title: string) {
   return `# ${title}
 
@@ -125,10 +145,94 @@ async function withSmokeSession<T>(
 async function assertProjectsCreateEntry() {
   await withSmokeSession(async (cookie, db) => {
     const projectId = "page-smoke-solution-list-project";
+    const markdownDocumentId = "page-smoke-solution-list-md";
+    const markdownVersionId = "page-smoke-solution-list-md-v1";
+    const htmlDocumentId = "page-smoke-solution-list-html";
+    const htmlVersionId = "page-smoke-solution-list-html-v1";
+    const appendixDocumentId = "page-smoke-solution-list-appendix";
+    const appendixVersionId = "page-smoke-solution-list-appendix-v1";
+    db.prepare("delete from versions where document_id in (?, ?, ?)").run(
+      markdownDocumentId,
+      htmlDocumentId,
+      appendixDocumentId
+    );
+    db.prepare("delete from documents where project_id = ?").run(projectId);
     db.prepare("delete from projects where id = ?").run(projectId);
     db.prepare(
       "insert into projects (id, name, description, color, created_by) values (?, ?, ?, ?, ?)"
     ).run(projectId, "Page Smoke Solution", null, "#6366f1", "page-smoke-user");
+    db.prepare(
+      "insert into documents (id, project_id, title, type, status, priority, tags, owner_id, current_version_id, description) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      markdownDocumentId,
+      projectId,
+      "Smoke PRD",
+      "md",
+      "draft",
+      "P1",
+      "[]",
+      "page-smoke-user",
+      markdownVersionId,
+      "Markdown card thumbnail"
+    );
+    db.prepare(
+      "insert into documents (id, project_id, title, type, status, priority, tags, owner_id, current_version_id, description) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      htmlDocumentId,
+      projectId,
+      "Smoke Prototype",
+      "html",
+      "draft",
+      "P2",
+      "[]",
+      "page-smoke-user",
+      htmlVersionId,
+      "HTML card thumbnail"
+    );
+    db.prepare(
+      "insert into documents (id, project_id, title, type, status, priority, tags, owner_id, current_version_id, description) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      appendixDocumentId,
+      projectId,
+      "Smoke Appendix",
+      "appendix",
+      "draft",
+      "P3",
+      "[]",
+      "page-smoke-user",
+      appendixVersionId,
+      "Appendix card thumbnail"
+    );
+    db.prepare(
+      "insert into versions (id, document_id, message, content, size, created_by) values (?, ?, ?, ?, ?, ?)"
+    ).run(
+      markdownVersionId,
+      markdownDocumentId,
+      "PRD content thumbnail",
+      "# Plugin Market\n\nInstall flow supports search, permissions and version rollback.",
+      72,
+      "page-smoke-user"
+    );
+    db.prepare(
+      "insert into versions (id, document_id, message, content, size, created_by) values (?, ?, ?, ?, ?, ?)"
+    ).run(
+      htmlVersionId,
+      htmlDocumentId,
+      "HTML content thumbnail",
+      "<!doctype html><html><head><title>Prototype Shell</title></head><body><h1>Plugin Market Prototype</h1><p>Install button appears on each card.</p></body></html>",
+      148,
+      "page-smoke-user"
+    );
+    db.prepare(
+      "insert into versions (id, document_id, message, storage_path, size, created_by) values (?, ?, ?, ?, ?, ?)"
+    ).run(
+      appendixVersionId,
+      appendixDocumentId,
+      "Appendix content thumbnail",
+      "appendices/page-smoke-solution-list-project/page-smoke-solution-list-appendix/smoke.pdf",
+      20,
+      "page-smoke-user"
+    );
 
     try {
       const response = await fetch(`${baseUrl}/projects`, {
@@ -154,10 +258,37 @@ async function assertProjectsCreateEntry() {
       if (!html.includes(`/solutions/${projectId}`)) {
         throw new Error("Expected /projects solution cards to link to solution detail");
       }
+      if (!html.includes('data-project-card-density="compact"')) {
+        throw new Error("Expected /projects to render compact project cards");
+      }
+      if (html.includes("个资产")) {
+        throw new Error("Expected project cards to avoid redundant asset total copy");
+      }
+      for (const kind of ["md", "html", "appendix"]) {
+        if (!html.includes(`data-project-asset-kind="${kind}"`)) {
+          throw new Error(`Expected project card stack to render ${kind} asset thumbnail`);
+        }
+      }
+      for (const text of [
+        "Plugin Market",
+        "Install flow",
+        "Plugin Market Prototype",
+        "Install button",
+      ]) {
+        if (!html.includes(text)) {
+          throw new Error(`Expected project card thumbnail to include real content: ${text}`);
+        }
+      }
       if (html.includes("disabled=\"\"")) {
         throw new Error("Expected create project entry to be enabled");
       }
     } finally {
+      db.prepare("delete from versions where document_id in (?, ?, ?)").run(
+        markdownDocumentId,
+        htmlDocumentId,
+        appendixDocumentId
+      );
+      db.prepare("delete from documents where project_id = ?").run(projectId);
       db.prepare("delete from projects where id = ?").run(projectId);
     }
   });
@@ -212,9 +343,28 @@ async function assertSolutionAssetStructure() {
         throw new Error(`Expected /solutions/[id] to return 200, got ${emptyResponse.status}`);
       }
       const emptyHtml = await emptyResponse.text();
-      for (const text of ["需求方案", "PRD", "交互原型", "附录说明", "上传 PRD", "上传原型", "上传附录"]) {
+      for (const text of [
+        "需求方案",
+        "评审",
+        "PRD",
+        "交互原型",
+        "附录说明",
+        "上传 PRD",
+        "上传原型",
+        "上传附录",
+      ]) {
         if (!emptyHtml.includes(text)) {
           throw new Error(`Expected solution detail to include ${text}`);
+        }
+      }
+      for (const marker of [
+        'data-solution-detail-layout="workspace"',
+        'data-solution-review-entry="header"',
+        'data-solution-asset-rail="primary"',
+        'data-solution-appendix-list="compact"',
+      ]) {
+        if (!emptyHtml.includes(marker)) {
+          throw new Error(`Expected solution detail workspace layout marker ${marker}`);
         }
       }
       if (emptyHtml.includes("项目")) {
@@ -232,6 +382,7 @@ async function assertSolutionAssetStructure() {
       if (prdV1.response.status !== 201 || !prdV1.body.document?.id) {
         throw new Error(`Expected PRD upload to create asset, got ${prdV1.response.status}: ${JSON.stringify(prdV1.body)}`);
       }
+      const prdV1Id = prdV1.body.document.currentVersionId;
 
       const prdV2 = await postSolutionAsset(cookie, {
         solutionId: projectId,
@@ -244,6 +395,7 @@ async function assertSolutionAssetStructure() {
       if (prdV2.response.status !== 201 || prdV2.body.document?.id !== prdV1.body.document.id) {
         throw new Error("Expected repeated PRD upload to create a new version on the same asset");
       }
+      const prdV2Id = prdV2.body.document.currentVersionId;
 
       const prdDocCount = db
         .prepare("select count(*) as count from documents where project_id = ? and type = 'md'")
@@ -281,6 +433,8 @@ async function assertSolutionAssetStructure() {
       ) {
         throw new Error("Expected repeated prototype upload to version the same asset");
       }
+      const protoV1Id = protoV1.body.document.currentVersionId;
+      const protoV2Id = protoV2.body.document.currentVersionId;
 
       const appendixOne = await postSolutionAsset(cookie, {
         solutionId: projectId,
@@ -312,10 +466,92 @@ async function assertSolutionAssetStructure() {
         headers: { Cookie: cookie },
       });
       const filledHtml = await filledResponse.text();
-      for (const text of ["PRD v2", "原型 v2", "附件一", "附件二", "版本记录"]) {
+      for (const text of [
+        "PRD V2",
+        "Prototype V2",
+        "附件一",
+        "附件二",
+        "版本历史",
+        "编辑",
+        "预览",
+        "mode=joint",
+        "mode=preview",
+        `version=${protoV2Id}`,
+        `/api/documents/${prdV2.body.document.id}/versions/${prdV2Id}/download`,
+        `/api/documents/${protoV2.body.document.id}/versions/${protoV2Id}/download`,
+      ]) {
         if (!filledHtml.includes(text)) {
           throw new Error(`Expected filled solution detail to include ${text}`);
         }
+      }
+      const switchedResponse = await fetch(
+        `${baseUrl}/solutions/${projectId}?prdVersion=${prdV1Id}&prototypeVersion=${protoV1Id}`,
+        { headers: { Cookie: cookie } }
+      );
+      if (switchedResponse.status !== 200) {
+        throw new Error(`Expected selected solution versions to return 200, got ${switchedResponse.status}`);
+      }
+      const switchedHtml = await switchedResponse.text();
+      for (const text of ["PRD V1", "Prototype V1"]) {
+        if (!switchedHtml.includes(text)) {
+          throw new Error(`Expected selected solution version content to include ${text}`);
+        }
+      }
+      for (const text of ["PRD V2", "Prototype V2"]) {
+        if (switchedHtml.includes(text)) {
+          throw new Error(`Expected selected solution version preview to switch away from ${text}`);
+        }
+      }
+      const prdExportResponse = await fetch(
+        `${baseUrl}/api/documents/${prdV2.body.document.id}/versions/${prdV2Id}/download`,
+        { headers: { Cookie: cookie } }
+      );
+      if (prdExportResponse.status !== 200) {
+        throw new Error(`Expected PRD export to return 200, got ${prdExportResponse.status}`);
+      }
+      if (!prdExportResponse.headers.get("content-disposition")?.includes(".md")) {
+        throw new Error("Expected PRD export to download a markdown file");
+      }
+      if (!(await prdExportResponse.text()).includes("PRD V2")) {
+        throw new Error("Expected PRD export to include current markdown content");
+      }
+      const prototypeExportResponse = await fetch(
+        `${baseUrl}/api/documents/${protoV2.body.document.id}/versions/${protoV2Id}/download`,
+        { headers: { Cookie: cookie } }
+      );
+      if (prototypeExportResponse.status !== 200) {
+        throw new Error(`Expected prototype export to return 200, got ${prototypeExportResponse.status}`);
+      }
+      if (!prototypeExportResponse.headers.get("content-disposition")?.includes(".html")) {
+        throw new Error("Expected prototype export to download an HTML file");
+      }
+      if (!(await prototypeExportResponse.text()).includes("Prototype V2")) {
+        throw new Error("Expected prototype export to include current HTML content");
+      }
+      for (const text of ["编辑 PRD", "查看原型"]) {
+        if (filledHtml.includes(text)) {
+          throw new Error(`Expected solution detail to remove legacy asset action text: ${text}`);
+        }
+      }
+      for (const marker of [
+        'data-solution-render-preview="md"',
+        'data-solution-render-preview="html"',
+        'data-solution-prototype-frame="true"',
+        'data-solution-asset-card="md"',
+        'data-solution-asset-card="html"',
+        'data-solution-asset-footer-actions="md"',
+        'data-solution-asset-footer-actions="html"',
+      ]) {
+        if (!filledHtml.includes(marker)) {
+          throw new Error(`Expected filled solution detail to include rendered preview marker ${marker}`);
+        }
+      }
+      if (
+        !filledHtml.includes(
+          `/proto/${protoV2.body.document.id}/${protoV2.body.document.currentVersionId}/index.html`
+        )
+      ) {
+        throw new Error("Expected solution detail prototype card to render the live prototype iframe");
       }
       if (!filledHtml.includes(`/api/appendices/${appendixOne.body.document.id}/download`)) {
         throw new Error("Expected appendix cards to expose a download link");
@@ -517,20 +753,15 @@ async function assertSolutionReviewWorkflow() {
       for (const marker of [
         "评审问题台账",
         "data-review-issue-ledger",
-        "PRD 需要补充失败态",
-        "原型按钮文案已调整",
-        "这条讨论已关闭",
         "待处理",
-        "已处理",
-        "已关闭",
         "导出评审上下文",
-        "版本更新说明",
-        "PRD 明确结算边界",
-        "原型补充支付按钮",
       ]) {
         if (!html.includes(marker)) {
           throw new Error(`Expected review workflow page to include ${marker}`);
         }
+      }
+      if (html.includes('data-review-issue-ledger="summary"')) {
+        throw new Error("Expected solution detail to avoid a flat review issue ledger");
       }
 
       const patchResponse = await fetch(`${baseUrl}/api/comments/${openCommentId}`, {
@@ -788,6 +1019,9 @@ async function assertDocumentDetailPage() {
       if (editHtml.includes("评审评论")) {
         throw new Error("Expected edit mode to hide review comments panel");
       }
+      if (editHtml.includes(`/docs/${documentId}?mode=review`)) {
+        throw new Error("Expected edit mode to avoid an inline switch into PRD review");
+      }
 
       const reviewResponse = await fetch(`${baseUrl}/docs/${documentId}?mode=review`, {
         headers: { Cookie: cookie },
@@ -801,6 +1035,15 @@ async function assertDocumentDetailPage() {
       const reviewHtml = await reviewResponse.text();
       if (!reviewHtml.includes("评审预览")) {
         throw new Error("Expected review mode to render review preview surface");
+      }
+      if (!reviewHtml.includes('data-review-scope-switcher="true"')) {
+        throw new Error("Expected review mode to render review scope switching");
+      }
+      if (!reviewHtml.includes("需求评审")) {
+        throw new Error("Expected review mode to expose the PRD review scope");
+      }
+      if (reviewHtml.includes(`/docs/${documentId}?mode=edit`)) {
+        throw new Error("Expected PRD review mode to avoid an inline switch back to editing");
       }
       if (reviewHtml.includes("id=\"markdown-editor\"")) {
         throw new Error("Expected review mode to hide markdown editor textarea");
@@ -1669,23 +1912,29 @@ async function assertPrototypeSandboxPage() {
 
       const html = await response.text();
       for (const text of [
-        "原型沙盘",
+        "原型预览",
         "刷新",
-        "新窗口打开",
+        "打开",
         "全屏",
-        "版本切换",
-        "编辑模式",
-        "保存新版",
-        "导出 HTML",
-        "标注模式",
-        "显示标注",
-        "原型评审",
-        "元素命中标注",
-        "视觉标注 smoke",
-        "通过 API 创建原型视觉标注",
+        'data-prototype-sandbox-mode="preview"',
+        'data-prototype-comment-panel="hidden"',
       ]) {
         if (!html.includes(text)) {
-          throw new Error(`Expected prototype sandbox page to include ${text}`);
+          throw new Error(`Expected prototype preview page to include ${text}`);
+        }
+      }
+      for (const excluded of [
+        "联合评审",
+        "需求评审",
+        "原型评审",
+        "data-review-scope-switcher",
+        "标注",
+        "保存新版",
+        "导出 HTML",
+        "通过 API 创建原型视觉标注",
+      ]) {
+        if (html.includes(excluded)) {
+          throw new Error(`Expected prototype preview page to exclude ${excluded}`);
         }
       }
       if (html.includes("data-prototype-comment-marker")) {
@@ -1708,6 +1957,38 @@ async function assertPrototypeSandboxPage() {
         }
       }
 
+      const reviewResponse = await fetch(
+        `${baseUrl}/docs/${documentId}?mode=review&version=${previousVersionId}`,
+        { headers: { Cookie: cookie } }
+      );
+      if (reviewResponse.status !== 200) {
+        throw new Error(
+          `Expected prototype review page to return 200, got ${reviewResponse.status}`
+        );
+      }
+      const reviewHtml = await reviewResponse.text();
+      for (const text of [
+        "原型评审",
+        "联合评审",
+        "需求评审",
+        "编辑",
+        "标注",
+        "评论",
+        "开启标注后，点击元素添加评论。",
+        "通过 API 创建原型视觉标注",
+        "data-review-scope-switcher",
+        'data-prototype-sandbox-mode="review"',
+      ]) {
+        if (!reviewHtml.includes(text)) {
+          throw new Error(`Expected prototype review page to include ${text}`);
+        }
+      }
+      for (const excluded of ["只看 HTML", "只看 PRD", "元素命中标注"]) {
+        if (reviewHtml.includes(excluded)) {
+          throw new Error(`Expected prototype review page to exclude legacy text ${excluded}`);
+        }
+      }
+
       const jointResponse = await fetch(
         `${baseUrl}/docs/${documentId}?mode=joint&version=${previousVersionId}`,
         { headers: { Cookie: cookie } }
@@ -1720,10 +2001,12 @@ async function assertPrototypeSandboxPage() {
       const jointHtml = await jointResponse.text();
       for (const text of [
         "联合评审",
+        "需求评审",
+        "原型评审",
         "PRD 对照",
         "Prototype Linked PRD",
         "Use this PRD beside the prototype",
-        "原型沙盘",
+        "原型评审",
         "通过 API 创建原型视觉标注",
       ]) {
         if (!jointHtml.includes(text)) {
@@ -1756,6 +2039,7 @@ async function assertPrototypeSandboxPage() {
 }
 
 async function main() {
+  assertFloatingActionsRenderThroughPortal();
   await assertPage("/projects");
   await assertPage("/docs");
   await assertPage("/board");

@@ -31,13 +31,13 @@ function isUnsafeSegment(segment: string) {
 }
 
 function annotationAgentScript() {
-  return `<script data-prd-hub-agent-script="true">
+  return `<script data-intentloop-agent-script="true">
 ;(() => {
   if (window.__prdHubPrototypeAnnotationAgent) return;
   window.__prdHubPrototypeAnnotationAgent = true;
   document.documentElement.dataset.prdHubPrototypeAgent = "ready";
-  const SOURCE = "prd-hub-prototype-agent";
-  const HOST = "prd-hub-prototype-host";
+  const SOURCE = "intentloop-prototype-agent";
+  const HOST = "intentloop-prototype-host";
   const INTERACTIVE = [
     "a[href]",
     "button",
@@ -325,12 +325,12 @@ function annotationAgentScript() {
   }
 
   function ensureAgentStyle() {
-    if (document.querySelector("style[data-prd-hub-agent-style]")) return;
+    if (document.querySelector("style[data-intentloop-agent-style]")) return;
     const style = document.createElement("style");
-    style.setAttribute("data-prd-hub-agent-style", "true");
+    style.setAttribute("data-intentloop-agent-style", "true");
     style.textContent = [
-      "[data-prd-hub-edit-target='true']{outline:2px solid #2563eb!important;outline-offset:2px!important;cursor:text!important;}",
-      "[data-prd-hub-editing='true']{outline:2px solid #2563eb!important;outline-offset:2px!important;background:rgba(37,99,235,.08)!important;cursor:text!important;}"
+      "[data-intentloop-edit-target='true']{outline:2px solid #2563eb!important;outline-offset:2px!important;cursor:text!important;}",
+      "[data-intentloop-editing='true']{outline:2px solid #2563eb!important;outline-offset:2px!important;background:rgba(37,99,235,.08)!important;cursor:text!important;}"
     ].join("\\n");
     (document.head || document.documentElement).appendChild(style);
   }
@@ -348,7 +348,7 @@ function annotationAgentScript() {
       return false;
     }
     if (element.matches("input, textarea, select, option")) return false;
-    if (element.closest("[data-prd-hub-agent-script], [data-prd-hub-agent-style]")) return false;
+    if (element.closest("[data-intentloop-agent-script], [data-intentloop-agent-style]")) return false;
     return isVisible(element) && textOf(element).length > 0;
   }
 
@@ -366,7 +366,7 @@ function annotationAgentScript() {
 
   function clearTextEditHover() {
     if (hoverEditElement) {
-      hoverEditElement.removeAttribute("data-prd-hub-edit-target");
+      hoverEditElement.removeAttribute("data-intentloop-edit-target");
       hoverEditElement = null;
     }
   }
@@ -375,7 +375,7 @@ function annotationAgentScript() {
     if (hoverEditElement === element) return;
     clearTextEditHover();
     hoverEditElement = element;
-    hoverEditElement.setAttribute("data-prd-hub-edit-target", "true");
+    hoverEditElement.setAttribute("data-intentloop-edit-target", "true");
   }
 
   function selectElementContents(element) {
@@ -405,7 +405,7 @@ function annotationAgentScript() {
     } else {
       element.setAttribute("contenteditable", record.previousContentEditable);
     }
-    element.removeAttribute("data-prd-hub-editing");
+    element.removeAttribute("data-intentloop-editing");
     if (keepChanges && nextText !== record.originalText) {
       const selector = selectorFor(element);
       const xpath = xpathFor(element);
@@ -431,7 +431,7 @@ function annotationAgentScript() {
       previousContentEditable: element.getAttribute("contenteditable")
     };
     element.setAttribute("contenteditable", "plaintext-only");
-    element.setAttribute("data-prd-hub-editing", "true");
+    element.setAttribute("data-intentloop-editing", "true");
     element.focus({ preventScroll: true });
     selectElementContents(element);
   }
@@ -491,11 +491,11 @@ function annotationAgentScript() {
     finishTextEdit(true);
     clearTextEditHover();
     const clone = document.documentElement.cloneNode(true);
-    clone.removeAttribute("data-prd-hub-prototype-agent");
-    clone.querySelectorAll("[data-prd-hub-agent-script], [data-prd-hub-agent-style]").forEach((node) => node.remove());
-    clone.querySelectorAll("[data-prd-hub-edit-target], [data-prd-hub-editing]").forEach((element) => {
-      element.removeAttribute("data-prd-hub-edit-target");
-      element.removeAttribute("data-prd-hub-editing");
+    clone.removeAttribute("data-intentloop-prototype-agent");
+    clone.querySelectorAll("[data-intentloop-agent-script], [data-intentloop-agent-style]").forEach((node) => node.remove());
+    clone.querySelectorAll("[data-intentloop-edit-target], [data-intentloop-editing]").forEach((element) => {
+      element.removeAttribute("data-intentloop-edit-target");
+      element.removeAttribute("data-intentloop-editing");
       element.removeAttribute("contenteditable");
     });
     return doctypeString() + clone.outerHTML;
@@ -673,6 +673,39 @@ function injectAnnotationAgent(html: string) {
   return `${html}${script}`;
 }
 
+function normalizeHtmlCharset(charset: string | null) {
+  if (!charset) return null;
+  const normalized = charset.trim().toLowerCase().replace(/^["']|["']$/g, "");
+  if (normalized === "utf8") return "utf-8";
+  if (normalized === "gbk" || normalized === "gb2312") return "gb18030";
+  return normalized;
+}
+
+function detectHtmlCharset(rawBody: Buffer) {
+  const head = rawBody.subarray(0, 4096).toString("latin1");
+  const direct = head.match(/<meta\s+[^>]*charset=["']?\s*([^"'\s/>]+)/i)?.[1];
+  if (direct) return normalizeHtmlCharset(direct);
+
+  const contentType = head.match(/<meta\s+[^>]*content=["'][^"']*charset=([^;"'\s>]+)/i)?.[1];
+  return normalizeHtmlCharset(contentType ?? null);
+}
+
+function decodeHtmlBody(rawBody: Buffer) {
+  const candidates = [detectHtmlCharset(rawBody), "utf-8", "gb18030"].filter(
+    (value, index, list): value is string => Boolean(value) && list.indexOf(value) === index
+  );
+
+  for (const encoding of candidates) {
+    try {
+      return new TextDecoder(encoding, { fatal: true }).decode(rawBody);
+    } catch {
+      // Try the next likely encoding.
+    }
+  }
+
+  return rawBody.toString("utf-8");
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ path: string[] }> }
@@ -707,7 +740,7 @@ export async function GET(
   const rawBody = fs.readFileSync(filePath);
   const body =
     ext === ".html" || ext === ".htm"
-      ? Buffer.from(injectAnnotationAgent(rawBody.toString("utf-8")), "utf-8")
+      ? Buffer.from(injectAnnotationAgent(decodeHtmlBody(rawBody)), "utf-8")
       : rawBody;
 
   return new NextResponse(new Uint8Array(body), {

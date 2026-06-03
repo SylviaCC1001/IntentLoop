@@ -19,6 +19,8 @@ import {
 
 type ReviewIssueLedgerProps = {
   issues: SolutionReviewIssue[];
+  /** 嵌入 Sheet 时隐藏自带标题头与外层卡片边框，避免与 SheetHeader 重复 */
+  embedded?: boolean;
 };
 
 type IssueFilter = "all" | "open" | "handled" | "closed";
@@ -45,7 +47,7 @@ function statusClass(status: ReviewIssueStatus) {
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
-export default function ReviewIssueLedger({ issues }: ReviewIssueLedgerProps) {
+export default function ReviewIssueLedger({ issues, embedded = false }: ReviewIssueLedgerProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<IssueFilter>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -98,19 +100,14 @@ export default function ReviewIssueLedger({ issues }: ReviewIssueLedgerProps) {
   return (
     <section
       data-review-issue-ledger="true"
-      className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      className={
+        embedded
+          ? "flex min-h-0 flex-1 flex-col"
+          : "overflow-hidden rounded-xl border border-border bg-card shadow-elev-1"
+      }
     >
-      <div className="flex flex-col gap-3 border-b border-border bg-background px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Review Ledger
-          </div>
-          <h2 className="mt-1 text-lg font-semibold">评审问题台账</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            汇总 PRD 和原型上的所有评审意见，集中推进处理状态。
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      {embedded ? (
+        <div className="flex flex-wrap gap-2 border-b border-border px-5 py-3">
           {(["all", "open", "handled", "closed"] as IssueFilter[]).map((item) => {
             const count = item === "closed" ? counts.closed : counts[item];
             return (
@@ -129,7 +126,35 @@ export default function ReviewIssueLedger({ issues }: ReviewIssueLedgerProps) {
             );
           })}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-3 border-b border-border bg-background px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">评审问题台账</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              汇总 PRD 和原型上的所有评审意见，集中推进处理状态。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(["all", "open", "handled", "closed"] as IssueFilter[]).map((item) => {
+              const count = item === "closed" ? counts.closed : counts[item];
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setFilter(item)}
+                  className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
+                    filter === item
+                      ? "border-primary bg-accent text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {filterLabels[item]} {count}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="border-b border-border bg-red-50 px-5 py-2 text-sm text-red-600">
@@ -137,7 +162,7 @@ export default function ReviewIssueLedger({ issues }: ReviewIssueLedgerProps) {
         </div>
       )}
 
-      <div className="divide-y divide-border">
+      <div className={embedded ? "flex-1 divide-y divide-border overflow-auto" : "divide-y divide-border"}>
         {visibleIssues.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">
             当前筛选下没有评审问题。
