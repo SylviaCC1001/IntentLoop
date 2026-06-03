@@ -19,6 +19,7 @@
 ```powershell
 winget install Git.Git
 winget install OpenJS.NodeJS.LTS
+winget install GitHub.cli
 winget install Cloudflare.cloudflared
 ```
 
@@ -28,16 +29,32 @@ winget install Cloudflare.cloudflared
 node -v
 npm -v
 git -v
+gh --version
 cloudflared --version
 ```
 
 Node 建议使用 `v22` 或更高版本。
 
-## 2. 拉取代码
+## 2. 登录 GitHub 并拉取代码
+
+当前仓库是私有仓库，需要先让 GitHub CLI 登录到 `SylviaCC1001`：
+
+```powershell
+gh auth login --hostname github.com --git-protocol https --web
+gh api user --jq .login
+```
+
+确认第二条命令输出：
+
+```text
+SylviaCC1001
+```
+
+然后拉取项目：
 
 ```powershell
 cd D:\
-git clone <你的仓库地址> IntentLoop
+gh repo clone SylviaCC1001/IntentLoop IntentLoop
 cd D:\IntentLoop
 npm ci
 ```
