@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS projects (
   name TEXT NOT NULL,
   description TEXT,
   color TEXT NOT NULL DEFAULT '#6366f1',
+  status TEXT NOT NULL DEFAULT 'draft',
   created_by TEXT NOT NULL REFERENCES users(id),
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
@@ -107,6 +108,13 @@ CREATE INDEX IF NOT EXISTS idx_comments_version ON comments(version_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 `);
+
+const projectColumns = db.prepare("PRAGMA table_info(projects)").all() as Array<{
+  name: string;
+}>;
+if (!projectColumns.some((column) => column.name === "status")) {
+  db.exec("ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'");
+}
 
 console.log("✅ 数据库迁移完成:", dbPath);
 db.close();
