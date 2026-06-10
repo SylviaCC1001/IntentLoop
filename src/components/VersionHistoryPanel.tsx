@@ -23,6 +23,7 @@ type VersionHistoryPanelProps = {
   documentId: string;
   currentVersionId: string | null;
   versions: VersionSummary[];
+  canRollback?: boolean;
 };
 
 function formatDate(value: string) {
@@ -42,6 +43,7 @@ export default function VersionHistoryPanel({
   documentId,
   currentVersionId,
   versions,
+  canRollback = true,
 }: VersionHistoryPanelProps) {
   const router = useRouter();
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -116,7 +118,7 @@ export default function VersionHistoryPanel({
             版本历史
           </h2>
           <p className="text-xs text-muted-foreground">
-            查看保存记录，对比历史版本，必要时回滚。
+            查看保存记录，对比历史版本{canRollback ? "，必要时回滚" : ""}。
           </p>
         </div>
         <span className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">
@@ -175,19 +177,21 @@ export default function VersionHistoryPanel({
                       )}
                       对比当前
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => rollback(version.id)}
-                      disabled={version.isCurrent || !version.hasTextContent || Boolean(rollingBackId)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
-                    >
-                      {isBusy ? (
-                        <Loader2 size={13} className="animate-spin" />
-                      ) : (
-                        <RotateCcw size={13} />
-                      )}
-                      回滚
-                    </button>
+                    {canRollback && (
+                      <button
+                        type="button"
+                        onClick={() => rollback(version.id)}
+                        disabled={version.isCurrent || !version.hasTextContent || Boolean(rollingBackId)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                      >
+                        {isBusy ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <RotateCcw size={13} />
+                        )}
+                        回滚
+                      </button>
+                    )}
                   </div>
                 </div>
               );

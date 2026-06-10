@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "邮箱已被注册" }, { status: 409 });
     }
 
-    // 第一个用户=管理员
+    // 第一个用户=管理者，后续默认产品角色
     const userCountResult = db
       .select({ c: count() })
       .from(schema.users)
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       passwordHash,
       displayName,
       avatarColor: randomAvatarColor(),
-      role: isFirst ? "admin" : "member",
+      role: isFirst ? "admin" : "product",
     }).run();
 
     await createSession(id);
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         id,
         email: email.toLowerCase(),
         displayName,
-        role: isFirst ? "admin" : "member",
+        role: isFirst ? "admin" : "product",
       },
     });
   } catch (e) {

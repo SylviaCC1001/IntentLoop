@@ -3,6 +3,7 @@ import { desc } from "drizzle-orm";
 import {
   CheckCircle2,
   Edit3,
+  Eye,
   FileCode2,
   FileText,
   FolderKanban,
@@ -10,6 +11,9 @@ import {
   Paperclip,
 } from "lucide-react";
 import { db, schema } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { canModifySolutions } from "@/lib/auth/permissions";
+import { getProjectReadCounts } from "@/lib/project-reads";
 import { Badge } from "@/components/ui/badge";
 import ProjectCreateDialog from "@/components/ProjectCreateDialog";
 import ProjectActions from "@/components/ProjectActions";
@@ -347,6 +351,8 @@ function ProjectAssetStack({
 }
 
 export default async function ProjectsPage() {
+  const user = await getCurrentUser();
+  const canModify = user ? canModifySolutions(user) : false;
   const projects = db
     .select()
     .from(schema.projects)
@@ -360,6 +366,7 @@ export default async function ProjectsPage() {
     .all();
   const versions = db.select().from(schema.versions).all();
   const currentVersionsByDocument = new Map<string, ProjectVersion>();
+  const readCountsByProject = getProjectReadCounts();
   for (const document of documents) {
     if (!document.currentVersionId) continue;
     const currentVersion = versions.find((version) => version.id === document.currentVersionId);
@@ -389,7 +396,7 @@ export default async function ProjectsPage() {
             按需求方案组织 PRD、交互原型、附录说明和评审记录。
           </p>
         </div>
-        <ProjectCreateDialog />
+        {canModify && <ProjectCreateDialog />}
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -452,10 +459,12 @@ export default async function ProjectsPage() {
             创建第一个需求方案后，就可以集中管理 PRD、交互原型和附录说明。
           </p>
           <div className="mt-6">
-            <ProjectCreateDialog
-              label="创建第一个需求方案"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-elev-1 transition-all hover:shadow-elev-2 active:scale-[0.98]"
-            />
+            {canModify && (
+              <ProjectCreateDialog
+                label="创建第一个需求方案"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-elev-1 transition-all hover:shadow-elev-2 active:scale-[0.98]"
+              />
+            )}
           </div>
         </section>
       ) : (
@@ -468,18 +477,20 @@ export default async function ProjectsPage() {
                 key={project.id}
                 className="group relative rounded-2xl transition-transform duration-300 hover:-translate-y-1"
               >
-                <div className="absolute right-2.5 top-2.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                  <div className="rounded-lg bg-card/85 backdrop-blur-sm shadow-elev-1">
-                    <ProjectActions
-                      project={{
-                        id: project.id,
-                        name: project.name,
-                        description: project.description,
-                        color: project.color,
-                      }}
-                    />
+                {canModify && (
+                  <div className="absolute right-2.5 top-2.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    <div className="rounded-lg bg-card/85 backdrop-blur-sm shadow-elev-1">
+                      <ProjectActions
+                        project={{
+                          id: project.id,
+                          name: project.name,
+                          description: project.description,
+                          color: project.color,
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
                 <Link
                   data-project-card-density="compact"
                   href={`/solutions/${project.id}`}
@@ -525,6 +536,10 @@ export default async function ProjectsPage() {
                         <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                           <Paperclip size={12} />
                           附录 {assetCounts.appendix}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          <Eye size={12} />
+                          已读 {readCountsByProject.get(project.id) ?? 0}
                         </span>
                       </div>
                       <time

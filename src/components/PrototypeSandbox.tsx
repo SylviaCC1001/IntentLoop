@@ -138,6 +138,7 @@ type PrototypeSandboxProps = {
   comments: PrototypeSandboxComment[];
   versions: PrototypeSandboxVersion[];
   defaultCommentPanelOpen?: boolean;
+  canEditHtmlText?: boolean;
   canSaveHtmlVersion?: boolean;
 };
 
@@ -196,6 +197,7 @@ export default function PrototypeSandbox({
   comments,
   versions,
   defaultCommentPanelOpen = true,
+  canEditHtmlText = true,
   canSaveHtmlVersion = true,
 }: PrototypeSandboxProps) {
   const router = useRouter();
@@ -261,6 +263,14 @@ export default function PrototypeSandbox({
       clearDraftAnnotation();
     }
   }, [reviewEnabled]);
+
+  useEffect(() => {
+    if (!canEditHtmlText) {
+      setTextEditEnabled(false);
+      setTextEditDirtyCount(0);
+      setEditError("");
+    }
+  }, [canEditHtmlText]);
 
   const postToFrame = useCallback((message: Record<string, unknown>) => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -483,6 +493,7 @@ export default function PrototypeSandbox({
 
   async function exportEditedHtml() {
     if (exportingHtml || !selectedVersionId) return;
+    if (!canEditHtmlText) return;
     if (!textEditDirtyCount && !textEditEnabled) {
       setEditError("当前没有可导出的修改");
       return;
@@ -507,6 +518,7 @@ export default function PrototypeSandbox({
 
   async function saveEditedHtmlVersion() {
     if (savingHtml || !selectedVersionId) return;
+    if (!canEditHtmlText) return;
     if (!canSaveHtmlVersion) {
       setEditError("多文件 zip 原型暂不支持直接保存新版，请先导出 HTML");
       return;
@@ -690,32 +702,34 @@ export default function PrototypeSandbox({
 
           {reviewEnabled && (
             <>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditError("");
-                  setTextEditEnabled((value) => {
-                    const next = !value;
-                    if (next) {
-                      setAnnotating(false);
-                      setHoverTarget(null);
-                      setReviewLayerVisible(false);
-                    }
-                    return next;
-                  });
-                }}
-                disabled={!selectedVersionId}
-                aria-pressed={textEditEnabled}
-                className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium disabled:opacity-50 ${
-                  textEditEnabled
-                    ? "border-primary bg-accent text-primary"
-                    : "border-border hover:bg-muted"
-                }`}
-                title="编辑原型文案"
-              >
-                <PencilLine size={14} />
-                {textEditEnabled ? "编辑中" : "编辑"}
-              </button>
+              {canEditHtmlText && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditError("");
+                    setTextEditEnabled((value) => {
+                      const next = !value;
+                      if (next) {
+                        setAnnotating(false);
+                        setHoverTarget(null);
+                        setReviewLayerVisible(false);
+                      }
+                      return next;
+                    });
+                  }}
+                  disabled={!selectedVersionId}
+                  aria-pressed={textEditEnabled}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium disabled:opacity-50 ${
+                    textEditEnabled
+                      ? "border-primary bg-accent text-primary"
+                      : "border-border hover:bg-muted"
+                  }`}
+                  title="编辑原型文案"
+                >
+                  <PencilLine size={14} />
+                  {textEditEnabled ? "编辑中" : "编辑"}
+                </button>
+              )}
 
               {(textEditEnabled || textEditDirtyCount > 0) && (
                 <>

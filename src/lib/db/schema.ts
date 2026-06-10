@@ -1,5 +1,13 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+
+export const userRoles = ["admin", "product", "engineering", "design"] as const;
+export type UserRole = (typeof userRoles)[number];
 
 // ========== 用户 ==========
 export const users = sqliteTable("users", {
@@ -8,9 +16,9 @@ export const users = sqliteTable("users", {
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name").notNull(),
   avatarColor: text("avatar_color").notNull(), // 头像背景色(hex)
-  role: text("role", { enum: ["admin", "member"] })
+  role: text("role", { enum: userRoles })
     .notNull()
-    .default("member"),
+    .default("product"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
@@ -35,6 +43,33 @@ export const projects = sqliteTable("projects", {
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
 });
+
+// ========== 需求方案阅读查看 ==========
+export const projectReads = sqliteTable(
+  "project_reads",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    readCount: integer("read_count").notNull().default(1),
+    firstReadAt: integer("first_read_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    lastReadAt: integer("last_read_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (table) => ({
+    projectUserUnique: uniqueIndex("idx_project_reads_project_user_unique").on(
+      table.projectId,
+      table.userId
+    ),
+  })
+);
 
 // ========== 文档 ==========
 // type:
@@ -206,6 +241,8 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
+export type ProjectRead = typeof projectReads.$inferSelect;
+export type NewProjectRead = typeof projectReads.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
 export type Version = typeof versions.$inferSelect;

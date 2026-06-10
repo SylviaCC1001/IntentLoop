@@ -12,8 +12,16 @@ import {
   FileText,
   Paperclip,
   UploadCloud,
+  UsersRound,
 } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { canModifySolutions } from "@/lib/auth/permissions";
 import { db, schema } from "@/lib/db";
+import {
+  getProjectReadSummaries,
+  recordProjectRead,
+  type ProjectReadSummary,
+} from "@/lib/project-reads";
 import { getSolutionReviewData } from "@/lib/solution-review";
 import ReviewLedgerSheet from "@/components/ReviewLedgerSheet";
 import AssetVersionSheet from "@/components/AssetVersionSheet";
@@ -236,6 +244,53 @@ function StatusBadge({ uploaded }: { uploaded: boolean }) {
   );
 }
 
+function ReadStatusPanel({ summaries }: { summaries: ProjectReadSummary[] }) {
+  return (
+    <section className="rounded-xl border border-border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <UsersRound size={16} />
+            阅读查看情况
+          </h2>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            记录成员打开该需求方案的查看状态和最近查看时间。
+          </p>
+        </div>
+        <span className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">
+          {summaries.filter((item) => item.hasRead).length}/{summaries.length} 已读
+        </span>
+      </div>
+
+      <div className="grid divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
+        {summaries.map((item) => (
+          <div key={item.userId} className="flex min-w-0 items-center gap-3 px-4 py-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
+              style={{ background: item.avatarColor }}
+            >
+              {item.displayName.slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-medium">{item.displayName}</span>
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                  {item.roleLabel}
+                </span>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {item.hasRead && item.lastReadAt
+                  ? `${formatDate(item.lastReadAt)} · ${item.readCount} 次`
+                  : "未查看"}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ReviewEntryButton({ href }: { href: string | null }) {
   if (!href) {
     return (
@@ -360,6 +415,7 @@ function AssetPreviewCard({
   primaryLabel,
   exportHref,
   exportLabel,
+  canModify,
 }: {
   kind: PreviewKind;
   label: string;
@@ -373,6 +429,7 @@ function AssetPreviewCard({
   primaryLabel?: string;
   exportHref?: string;
   exportLabel?: string;
+  canModify: boolean;
 }) {
   const current = selectedVersion ?? getCurrentVersion(document, versions);
   const preview = getAssetPreview(document, current, label, kind);
@@ -457,6 +514,7 @@ function AssetPreviewCard({
                 }}
                 exportHref={exportHref}
                 exportLabel={exportLabel}
+                canModify={canModify}
                 className="h-8"
               />
             </div>
@@ -471,10 +529,12 @@ function AppendixSection({
   solutionId,
   appendices,
   versionsByDocument,
+  canModify,
 }: {
   solutionId: string;
   appendices: AssetDocument[];
   versionsByDocument: Map<string, AssetVersion[]>;
+  canModify: boolean;
 }) {
   return (
     <section className="rounded-xl border border-border bg-card">
@@ -485,15 +545,17 @@ function AppendixSection({
             图片、Excel、PDF 或其他补充材料；附录不做版本历史。
           </p>
         </div>
-        <SolutionAssetUploadDialog
-          solutionId={solutionId}
-          assetType="appendix"
-          label="上传附录"
-          title="上传附录说明"
-          accept=""
-          helpText="支持图片、PDF、Excel、文本等补充材料。"
-          className={uploadButtonClass()}
-        />
+        {canModify && (
+          <SolutionAssetUploadDialog
+            solutionId={solutionId}
+            assetType="appendix"
+            label="上传附录"
+            title="上传附录说明"
+            accept=""
+            helpText="支持图片、PDF、Excel、文本等补充材料。"
+            className={uploadButtonClass()}
+          />
+        )}
       </div>
 
       <div data-solution-appendix-list="compact" className="divide-y divide-border">
@@ -526,14 +588,17 @@ function AppendixSection({
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 md:justify-end">
-                  <DocumentActions
-                    document={{
-                      id: appendix.id,
-                      title: appendix.title,
-                      description: appendix.description,
-                      priority: appendix.priority,
-                    }}
-                  />
+                  {canModify && (
+                    <DocumentActions
+                      document={{
+                        id: appendix.id,
+                        title: appendix.title,
+                        description: appendix.description,
+                        priority: appendix.priority,
+                      }}
+                      canModify={canModify}
+                    />
+                  )}
                   <Link href={`/api/appendices/${appendix.id}/download`} className={textButtonClass()}>
                     下载
                   </Link>
@@ -560,6 +625,7 @@ export default async function SolutionDetailPage({
 }) {
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
+  const currentUser = await getCurrentUser();
   const solution = db
     .select()
     .from(schema.projects)
@@ -570,6 +636,13 @@ export default async function SolutionDetailPage({
     notFound();
   }
 
+  if (currentUser) {
+    recordProjectRead(solution.id, currentUser.id);
+  }
+
+  const canModify = currentUser ? canModifySolutions(currentUser) : false;
+  const readSummaries = getProjectReadSummaries(solution.id);
+  const readUserCount = readSummaries.filter((item) => item.hasRead).length;
   const documents = db
     .select()
     .from(schema.documents)
@@ -610,7 +683,7 @@ export default async function SolutionDetailPage({
   const prototypeReviewHref = prototype
     ? prototypeModeHref(prototype.id, "review", selectedPrototypeVersion?.id)
     : null;
-  const jointReviewHref = prototype && prd
+  const jointReviewHref = prototype
     ? prototypeModeHref(prototype.id, "joint", selectedPrototypeVersion?.id)
     : null;
   const reviewEntryHref = jointReviewHref ?? prdReviewHref ?? prototypeReviewHref;
@@ -675,8 +748,15 @@ export default async function SolutionDetailPage({
             label="待处理评审"
             value={`${openIssueCount} 条`}
           />
+          <SummaryStat
+            icon={<UsersRound size={13} />}
+            label="阅读查看"
+            value={`${readUserCount}/${readSummaries.length} 人`}
+          />
         </div>
       </header>
+
+      <ReadStatusPanel summaries={readSummaries} />
 
       <section data-solution-asset-rail="primary" className="grid gap-4 xl:grid-cols-2">
         <AssetPreviewCard
@@ -688,25 +768,28 @@ export default async function SolutionDetailPage({
           versions={prdVersions}
           selectedVersion={selectedPrdVersion}
           upload={
-            <SolutionAssetUploadDialog
-              solutionId={solution.id}
-              assetType="prd"
-              label="上传 PRD"
-              title="上传 PRD"
-              accept=".md,text/markdown"
-              helpText="仅支持 Markdown 文件；重复上传会成为新的 PRD 版本。"
-              defaultTitle="PRD"
-              className={uploadButtonClass()}
-            />
+            canModify ? (
+              <SolutionAssetUploadDialog
+                solutionId={solution.id}
+                assetType="prd"
+                label="上传 PRD"
+                title="上传 PRD"
+                accept=".md,text/markdown"
+                helpText="仅支持 Markdown 文件；重复上传会成为新的 PRD 版本。"
+                defaultTitle="PRD"
+                className={uploadButtonClass()}
+              />
+            ) : null
           }
-          primaryHref={prd ? `/docs/${prd.id}?mode=edit` : undefined}
-          primaryLabel="编辑"
+          primaryHref={prd ? `/docs/${prd.id}?mode=${canModify ? "edit" : "review"}` : undefined}
+          primaryLabel={canModify ? "编辑" : "评审"}
           exportHref={
             prd && selectedPrdVersion
               ? `/api/documents/${prd.id}/versions/${selectedPrdVersion.id}/download`
               : undefined
           }
           exportLabel="导出 PRD"
+          canModify={canModify}
         />
 
         <AssetPreviewCard
@@ -718,16 +801,18 @@ export default async function SolutionDetailPage({
           versions={prototypeVersions}
           selectedVersion={selectedPrototypeVersion}
           upload={
-            <SolutionAssetUploadDialog
-              solutionId={solution.id}
-              assetType="prototype"
-              label="上传原型"
-              title="上传交互原型"
-              accept=".html,.htm,.zip,text/html,application/zip"
-              helpText="支持单 HTML 或包含 index.html 的 zip 原型包。"
-              defaultTitle="交互原型"
-              className={uploadButtonClass()}
-            />
+            canModify ? (
+              <SolutionAssetUploadDialog
+                solutionId={solution.id}
+                assetType="prototype"
+                label="上传原型"
+                title="上传交互原型"
+                accept=".html,.htm,.zip,text/html,application/zip"
+                helpText="支持单 HTML 或包含 index.html 的 zip 原型包。"
+                defaultTitle="交互原型"
+                className={uploadButtonClass()}
+              />
+            ) : null
           }
           primaryHref={
             prototype
@@ -741,6 +826,7 @@ export default async function SolutionDetailPage({
               : undefined
           }
           exportLabel="导出 HTML"
+          canModify={canModify}
         />
       </section>
 
@@ -748,6 +834,7 @@ export default async function SolutionDetailPage({
         solutionId={solution.id}
         appendices={appendices}
         versionsByDocument={versionsByDocument}
+        canModify={canModify}
       />
     </div>
   );

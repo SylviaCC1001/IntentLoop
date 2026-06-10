@@ -8,9 +8,15 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  ShieldCheck,
   Trello,
 } from "lucide-react";
 import type { User } from "@/lib/db/schema";
+import {
+  canManageUsers,
+  normalizeUserRole,
+  roleLabels,
+} from "@/lib/auth/permissions";
 import ProductLogo from "@/components/ProductLogo";
 
 export default function AppShell({
@@ -23,6 +29,8 @@ export default function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const normalizedRole = normalizeUserRole(user.role);
+  const roleLabel = roleLabels[normalizedRole];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -33,6 +41,9 @@ export default function AppShell({
   const navItems = [
     { href: "/projects", label: "需求方案", icon: FolderKanban },
     { href: "/board", label: "评审看板", icon: Trello },
+    ...(canManageUsers(user)
+      ? [{ href: "/permissions", label: "权限管理", icon: ShieldCheck }]
+      : []),
   ];
 
   return (
@@ -105,7 +116,7 @@ export default function AppShell({
             <div
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
               style={{ background: user.avatarColor }}
-              title={`${user.displayName} · ${user.role === "admin" ? "管理员" : "成员"}`}
+              title={`${user.displayName} · ${roleLabel}`}
             >
               {user.displayName.slice(0, 1).toUpperCase()}
             </div>
@@ -114,7 +125,7 @@ export default function AppShell({
                 {user.displayName}
               </div>
               <div className="text-xs text-muted-foreground truncate">
-                {user.role === "admin" ? "管理员" : "成员"}
+                {roleLabel}
               </div>
             </div>}
           </div>

@@ -4,6 +4,10 @@ import AdmZip from "adm-zip";
 import fs from "fs";
 import path from "path";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertCanModifySolutions,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
 import { db, schema } from "@/lib/db";
 import { commit } from "@/lib/git";
 import { genId } from "@/lib/utils";
@@ -125,6 +129,7 @@ function findIndexFile(root: string) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
+    assertCanModifySolutions(user);
     const maxSize = Number(process.env.MAX_UPLOAD_SIZE_MB || 50) * 1024 * 1024;
     let formData: FormData;
     try {
@@ -250,6 +255,12 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (e instanceof Error) {
+      const message = forbiddenResponseMessage(e);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
     }
     console.error(e);
     return NextResponse.json({ error: "服务器错误" }, { status: 500 });

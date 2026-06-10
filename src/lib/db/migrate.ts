@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
   avatar_color TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'member',
+  role TEXT NOT NULL DEFAULT 'product',
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
 );
 
@@ -38,6 +38,16 @@ CREATE TABLE IF NOT EXISTS projects (
   created_by TEXT NOT NULL REFERENCES users(id),
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+);
+
+CREATE TABLE IF NOT EXISTS project_reads (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_count INTEGER NOT NULL DEFAULT 1,
+  first_read_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+  last_read_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+  UNIQUE(project_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -102,12 +112,23 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents(owner_id);
+CREATE INDEX IF NOT EXISTS idx_project_reads_project ON project_reads(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_reads_user ON project_reads(user_id);
 CREATE INDEX IF NOT EXISTS idx_versions_document ON versions(document_id);
 CREATE INDEX IF NOT EXISTS idx_comments_document ON comments(document_id);
 CREATE INDEX IF NOT EXISTS idx_comments_version ON comments(version_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 `);
+
+const userColumns = db.prepare("PRAGMA table_info(users)").all() as Array<{
+  name: string;
+}>;
+if (!userColumns.some((column) => column.name === "role")) {
+  db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'product'");
+}
+
+db.exec("UPDATE users SET role = 'product' WHERE role = 'member'");
 
 const projectColumns = db.prepare("PRAGMA table_info(projects)").all() as Array<{
   name: string;

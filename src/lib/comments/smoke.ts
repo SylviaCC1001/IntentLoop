@@ -24,7 +24,7 @@ async function main() {
         passwordHash: "hash",
         displayName: "Owner",
         avatarColor: "#2563eb",
-        role: "member",
+        role: "product",
       },
       {
         id: "reviewer",
@@ -32,7 +32,7 @@ async function main() {
         passwordHash: "hash",
         displayName: "Reviewer",
         avatarColor: "#0f766e",
-        role: "member",
+        role: "product",
       },
     ])
     .run();
@@ -83,7 +83,7 @@ async function main() {
     })
     .run();
 
-  const updated = updateComment("comment", { id: "owner", role: "member" }, {
+  const updated = updateComment("comment", { id: "owner", role: "product" }, {
     body: "Updated",
   });
   if (updated.body !== "Updated") {
@@ -92,14 +92,14 @@ async function main() {
 
   let forbidden = false;
   try {
-    updateComment("comment", { id: "reviewer", role: "member" }, {
+    updateComment("comment", { id: "reviewer", role: "product" }, {
       body: "Nope",
     });
   } catch (error) {
     forbidden = error instanceof Error && error.message === "COMMENT_FORBIDDEN";
   }
   if (!forbidden) {
-    throw new Error("Expected non-owner member update to be forbidden");
+    throw new Error("Expected non-owner product update to be forbidden");
   }
 
   const resolved = resolveComment("comment", true);
@@ -107,7 +107,7 @@ async function main() {
     throw new Error("Expected comment to resolve");
   }
 
-  deleteComment("comment", { id: "owner", role: "member" });
+  deleteComment("comment", { id: "owner", role: "product" });
   const deleted = db
     .select()
     .from(schema.comments)

@@ -142,6 +142,245 @@ async function withSmokeSession<T>(
   }
 }
 
+async function assertRolePermissionsAndReadTracking() {
+  await withSmokeSession(async (_adminCookie, db) => {
+    const projectId = "page-smoke-role-project";
+    const documentId = "page-smoke-role-document";
+    const versionId = "page-smoke-role-version";
+    const roles = [
+      ["page-smoke-role-admin", "admin", "Role Admin"],
+      ["page-smoke-role-product", "product", "Role Product"],
+      ["page-smoke-role-engineering", "engineering", "Role Engineering"],
+      ["page-smoke-role-design", "design", "Role Design"],
+    ] as const;
+    const sessions = Object.fromEntries(
+      roles.map(([userId]) => [userId, `${userId}-session`])
+    );
+
+    function cookieFor(userId: string) {
+      return `prd_session=${sessions[userId]}`;
+    }
+
+    async function expectStatus(
+      response: Response,
+      expected: number,
+      label: string
+    ) {
+      if (response.status !== expected) {
+        const body = await response.text().catch(() => "");
+        throw new Error(
+          `Expected ${label} to return ${expected}, got ${response.status}: ${body.slice(0, 240)}`
+        );
+      }
+    }
+
+    for (const [, , displayName] of roles) {
+      db.prepare("delete from sessions where user_id in (select id from users where display_name = ?)").run(displayName);
+    }
+    for (const [userId] of roles) {
+      db.prepare("delete from sessions where id = ?").run(sessions[userId]);
+    }
+    db.prepare("delete from versions where document_id = ?").run(documentId);
+    db.prepare("delete from comments where document_id = ?").run(documentId);
+    db.prepare("delete from documents where project_id = ?").run(projectId);
+    db.prepare("delete from projects where id = ?").run(projectId);
+    for (const [userId] of roles) {
+      db.prepare("delete from projects where created_by = ?").run(userId);
+      db.prepare("delete from users where id = ?").run(userId);
+    }
+
+    for (const [userId, role, displayName] of roles) {
+      db.prepare(
+        "insert into users (id, email, password_hash, display_name, avatar_color, role) values (?, ?, ?, ?, ?, ?)"
+      ).run(
+        userId,
+        `${userId}@example.local`,
+        "hash",
+        displayName,
+        "#6366f1",
+        role
+      );
+      db.prepare("insert into sessions (id, user_id, expires_at) values (?, ?, ?)").run(
+        sessions[userId],
+        userId,
+        Date.now() + 60_000
+      );
+    }
+
+    db.prepare(
+      "insert into projects (id, name, description, color, created_by) values (?, ?, ?, ?, ?)"
+    ).run(projectId, "Role Permission Smoke", null, "#6366f1", "page-smoke-role-product");
+    db.prepare(
+      "insert into documents (id, project_id, title, type, status, priority, tags, owner_id, current_version_id, description) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      documentId,
+      projectId,
+      "Role PRD",
+      "md",
+      "draft",
+      "P1",
+      "[]",
+      "page-smoke-role-product",
+      versionId,
+      "Permission document"
+    );
+    db.prepare(
+      "insert into versions (id, document_id, message, content, size, created_by) values (?, ?, ?, ?, ?, ?)"
+    ).run(
+      versionId,
+      documentId,
+      "Role PRD version",
+      "# Role PRD\n\nEngineering can read and comment.",
+      42,
+      "page-smoke-role-product"
+    );
+
+    try {
+      const engineeringCookie = cookieFor("page-smoke-role-engineering");
+      const productCookie = cookieFor("page-smoke-role-product");
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/projects`, {
+          method: "POST",
+          headers: {
+            Cookie: engineeringCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Engineering Created Project",
+            description: "should be rejected",
+          }),
+        }),
+        403,
+        "engineering project create"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: {
+            Cookie: engineeringCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: "Engineering Rename" }),
+        }),
+        403,
+        "engineering project patch"
+      );
+
+      const uploadData = new FormData();
+      uploadData.set("assetType", "prd");
+      uploadData.set("file", new Blob(["# Blocked"], { type: "text/markdown" }), "blocked.md");
+      uploadData.set("title", "Blocked PRD");
+      await expectStatus(
+        await fetch(`${baseUrl}/api/solutions/${projectId}/assets`, {
+          method: "POST",
+          headers: { Cookie: engineeringCookie },
+          body: uploadData,
+        }),
+        403,
+        "engineering solution asset upload"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/documents/${documentId}/versions`, {
+          method: "POST",
+          headers: {
+            Cookie: engineeringCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content: "# Blocked edit",
+            message: "should be rejected",
+          }),
+        }),
+        403,
+        "engineering version save"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/documents/${documentId}/comments`, {
+          method: "POST",
+          headers: {
+            Cookie: engineeringCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            versionId,
+            anchor: { type: "doc" },
+            body: "研发可以评论",
+          }),
+        }),
+        201,
+        "engineering comment create"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: {
+            Cookie: productCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: "Role Permission Smoke Updated" }),
+        }),
+        200,
+        "product project patch"
+      );
+
+      const pageResponse = await fetch(`${baseUrl}/solutions/${projectId}`, {
+        headers: { Cookie: engineeringCookie },
+      });
+      await expectStatus(pageResponse, 200, "engineering solution page");
+      const html = await pageResponse.text();
+      for (const text of ["阅读查看情况", "Role Engineering", "Role Product"]) {
+        if (!html.includes(text)) {
+          throw new Error(`Expected engineering solution page to include ${text}`);
+        }
+      }
+      for (const text of ["上传 PRD", "上传原型", "上传附录"]) {
+        if (html.includes(text)) {
+          throw new Error(`Expected engineering solution page to hide ${text}`);
+        }
+      }
+
+      const read = db
+        .prepare(
+          "select read_count as readCount, last_read_at as lastReadAt from project_reads where project_id = ? and user_id = ?"
+        )
+        .get(projectId, "page-smoke-role-engineering") as
+        | { readCount: number; lastReadAt: number | null }
+        | undefined;
+      if (!read || read.readCount < 1 || !read.lastReadAt) {
+        throw new Error("Expected solution page view to record engineering read status");
+      }
+    } finally {
+      const createdDocuments = db
+        .prepare("select id from documents where project_id = ?")
+        .all(projectId) as Array<{ id: string }>;
+      for (const document of createdDocuments) {
+        fs.rmSync(path.join(process.env.DATA_DIR || "./data", "prototypes", document.id), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(process.env.DATA_DIR || "./data", "repos", document.id), {
+          recursive: true,
+          force: true,
+        });
+      }
+      db.prepare("delete from comments where document_id in (select id from documents where project_id = ?)").run(projectId);
+      db.prepare("delete from versions where document_id in (select id from documents where project_id = ?)").run(projectId);
+      db.prepare("delete from documents where project_id = ?").run(projectId);
+      db.prepare("delete from projects where id = ?").run(projectId);
+      for (const [userId] of roles) {
+        db.prepare("delete from projects where created_by = ?").run(userId);
+        db.prepare("delete from sessions where id = ?").run(sessions[userId]);
+        db.prepare("delete from users where id = ?").run(userId);
+      }
+    }
+  });
+}
+
 async function assertProjectsCreateEntry() {
   await withSmokeSession(async (cookie, db) => {
     const projectId = "page-smoke-solution-list-project";
@@ -369,6 +608,51 @@ async function assertSolutionAssetStructure() {
       }
       if (emptyHtml.includes("项目")) {
         throw new Error("Expected solution detail to avoid project wording");
+      }
+
+      const prototypeOnly = await postSolutionAsset(cookie, {
+        solutionId: projectId,
+        assetType: "prototype",
+        filename: "prototype-only.html",
+        title: "仅原型",
+        message: "仅上传原型",
+        file: new Blob(["<!doctype html><h1>Prototype Only</h1>"], { type: "text/html" }),
+      });
+      if (prototypeOnly.response.status !== 201 || !prototypeOnly.body.document?.id) {
+        throw new Error(
+          `Expected prototype-only upload to create asset, got ${prototypeOnly.response.status}: ${JSON.stringify(prototypeOnly.body)}`
+        );
+      }
+      const prototypeOnlyDocumentId = prototypeOnly.body.document.id;
+      const prototypeOnlyVersionId = prototypeOnly.body.document.currentVersionId;
+      const prototypeOnlyResponse = await fetch(`${baseUrl}/solutions/${projectId}`, {
+        headers: { Cookie: cookie },
+      });
+      const prototypeOnlyHtml = await prototypeOnlyResponse.text();
+      for (const text of [
+        "Prototype Only",
+        "mode=joint",
+        `version=${prototypeOnlyVersionId}`,
+      ]) {
+        if (!prototypeOnlyHtml.includes(text)) {
+          throw new Error(`Expected prototype-only solution detail to include ${text}`);
+        }
+      }
+
+      const prototypeOnlyJointResponse = await fetch(
+        `${baseUrl}/docs/${prototypeOnlyDocumentId}?mode=joint&version=${prototypeOnlyVersionId}`,
+        { headers: { Cookie: cookie } }
+      );
+      if (prototypeOnlyJointResponse.status !== 200) {
+        throw new Error(
+          `Expected prototype-only joint review to return 200, got ${prototypeOnlyJointResponse.status}`
+        );
+      }
+      const prototypeOnlyJointHtml = await prototypeOnlyJointResponse.text();
+      for (const text of ["PRD 对照", "当前需求方案下还没有 PRD 文档。", "Prototype Only"]) {
+        if (!prototypeOnlyJointHtml.includes(text)) {
+          throw new Error(`Expected prototype-only joint review to include ${text}`);
+        }
       }
 
       const prdV1 = await postSolutionAsset(cookie, {
@@ -1924,9 +2208,6 @@ async function assertPrototypeSandboxPage() {
         }
       }
       for (const excluded of [
-        "联合评审",
-        "需求评审",
-        "原型评审",
         "data-review-scope-switcher",
         "标注",
         "保存新版",
@@ -2043,6 +2324,7 @@ async function main() {
   await assertPage("/projects");
   await assertPage("/docs");
   await assertPage("/board");
+  await assertRolePermissionsAndReadTracking();
   await assertProjectsCreateEntry();
   await assertSolutionAssetStructure();
   await assertSolutionReviewWorkflow();

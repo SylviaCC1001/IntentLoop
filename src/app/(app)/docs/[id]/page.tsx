@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { ArrowLeft, FileCode2, FileText } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { canModifySolutions } from "@/lib/auth/permissions";
 import { db, schema } from "@/lib/db";
+import { recordProjectRead } from "@/lib/project-reads";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import MarkdownReviewWorkspace from "@/components/MarkdownReviewWorkspace";
 import PrototypeSandbox from "@/components/PrototypeSandbox";
@@ -130,6 +133,8 @@ export default async function DocumentDetailPage({
 }) {
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
+  const currentUser = await getCurrentUser();
+  const canModify = currentUser ? canModifySolutions(currentUser) : false;
   const document = db
     .select()
     .from(schema.documents)
@@ -141,20 +146,26 @@ export default async function DocumentDetailPage({
   }
 
   const isPrototypeDocument = document.type === "html" || document.type === "html-zip";
-  const mode =
+  const requestedMode =
     query.mode === "joint" && isPrototypeDocument
       ? "joint"
       : query.mode === "review"
         ? "review"
         : isPrototypeDocument
           ? "preview"
-        : "edit";
+          : "edit";
+  const mode = !canModify && document.type === "md" && requestedMode === "edit"
+    ? "review"
+    : requestedMode;
 
   const project = db
     .select()
     .from(schema.projects)
     .where(eq(schema.projects.id, document.projectId))
     .get();
+  if (currentUser && project) {
+    recordProjectRead(project.id, currentUser.id);
+  }
   const projectDocuments = db
     .select()
     .from(schema.documents)
@@ -234,7 +245,7 @@ export default async function DocumentDetailPage({
         isPrototypeDocument ? selectedPrototypeVersion?.id : linkedPrototypeVersion?.id
       )
     : null;
-  const scopeJointHref = linkedPrdDocument && linkedPrototypeDocument
+  const scopeJointHref = linkedPrototypeDocument
     ? prototypeModeHref(
         linkedPrototypeDocument.id,
         "joint",
@@ -316,6 +327,7 @@ export default async function DocumentDetailPage({
           <VersionHistoryPanel
             documentId={document.id}
             currentVersionId={document.currentVersionId}
+            canRollback={canModify}
             versions={versions.map((version) => ({
               id: version.id,
               message: version.message,
@@ -350,6 +362,7 @@ export default async function DocumentDetailPage({
           comments={[]}
           defaultCommentPanelOpen={false}
           canSaveHtmlVersion={false}
+          canEditHtmlText={false}
           versions={versions.map((version) => ({
             id: version.id,
             message: version.message,
@@ -372,7 +385,8 @@ export default async function DocumentDetailPage({
             previewUrl={protoSrc}
             previewHtml={selectedPrototypeVersion?.content ?? ""}
             comments={openPrototypeComments}
-            canSaveHtmlVersion={document.type === "html"}
+            canEditHtmlText={canModify}
+            canSaveHtmlVersion={canModify && document.type === "html"}
             versions={versions.map((version) => ({
               id: version.id,
               message: version.message,
@@ -385,6 +399,7 @@ export default async function DocumentDetailPage({
           <VersionHistoryPanel
             documentId={document.id}
             currentVersionId={document.currentVersionId}
+            canRollback={canModify}
             versions={versions.map((version) => ({
               id: version.id,
               message: version.message,
@@ -412,7 +427,8 @@ export default async function DocumentDetailPage({
             previewHtml={selectedPrototypeVersion?.content ?? ""}
             comments={openPrototypeComments}
             defaultCommentPanelOpen={false}
-            canSaveHtmlVersion={document.type === "html"}
+            canEditHtmlText={canModify}
+            canSaveHtmlVersion={canModify && document.type === "html"}
             versions={versions.map((version) => ({
               id: version.id,
               message: version.message,

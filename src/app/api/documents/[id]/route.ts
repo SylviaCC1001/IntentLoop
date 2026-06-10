@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertCanModifySolutions,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
 import { genId } from "@/lib/utils";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -55,6 +59,7 @@ export async function PATCH(
 ) {
   try {
     const user = await requireAuth();
+    assertCanModifySolutions(user);
     const { id } = await params;
     const body = await req.json();
     const data = updateSchema.parse(body);
@@ -86,6 +91,12 @@ export async function PATCH(
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
+    if (e instanceof Error) {
+      const message = forbiddenResponseMessage(e);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
+    }
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: "参数错误" }, { status: 400 });
     }
@@ -99,7 +110,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
+    assertCanModifySolutions(user);
     const { id } = await params;
 
     // 删除文件系统中的原型目录
@@ -117,6 +129,12 @@ export async function DELETE(
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (e instanceof Error) {
+      const message = forbiddenResponseMessage(e);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
     }
     return NextResponse.json({ error: "服务器错误" }, { status: 500 });
   }

@@ -12,6 +12,7 @@ type DocumentActionsProps = {
   className?: string;
   exportHref?: string;
   exportLabel?: string;
+  canModify?: boolean;
 };
 
 export default function DocumentActions({
@@ -20,6 +21,7 @@ export default function DocumentActions({
   className,
   exportHref,
   exportLabel = "导出",
+  canModify = true,
 }: DocumentActionsProps) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -54,22 +56,26 @@ export default function DocumentActions({
                 },
               ]
             : []),
-          {
-            key: "rename",
-            label: "编辑",
-            icon: <Pencil size={14} />,
-            onSelect: () => setEditOpen(true),
-          },
-          {
-            key: "delete",
-            label: "删除",
-            icon: <Trash2 size={14} />,
-            danger: true,
-            confirmTitle: `删除 ${document.title}？`,
-            confirmDescription:
-              "删除后,该文档的所有版本、评论和原型文件都会一并删除,无法恢复。",
-            onSelect: handleDelete,
-          },
+          ...(canModify
+            ? [
+                {
+                  key: "rename",
+                  label: "编辑",
+                  icon: <Pencil size={14} />,
+                  onSelect: () => setEditOpen(true),
+                },
+                {
+                  key: "delete",
+                  label: "删除",
+                  icon: <Trash2 size={14} />,
+                  danger: true,
+                  confirmTitle: `删除 ${document.title}？`,
+                  confirmDescription:
+                    "删除后,该文档的所有版本、评论和原型文件都会一并删除,无法恢复。",
+                  onSelect: handleDelete,
+                },
+              ]
+            : []),
         ]}
       />
       <DocumentCreateDialog

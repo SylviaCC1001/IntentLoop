@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertCanModifySolutions,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
 import { genId } from "@/lib/utils";
 import { commit } from "@/lib/git";
 import { eq, desc, and } from "drizzle-orm";
@@ -54,6 +58,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
+    assertCanModifySolutions(user);
     const body = await req.json();
     const data = createSchema.parse(body);
 
@@ -102,6 +107,12 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (e instanceof Error) {
+      const message = forbiddenResponseMessage(e);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
     }
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: "参数错误", detail: e.errors }, { status: 400 });

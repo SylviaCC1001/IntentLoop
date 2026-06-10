@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertCanModifySolutions,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
 import { genId } from "@/lib/utils";
 import AdmZip from "adm-zip";
 import { eq } from "drizzle-orm";
@@ -15,6 +19,7 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
+    assertCanModifySolutions(user);
     const { id } = await params;
 
     const formData = await req.formData();
@@ -145,6 +150,12 @@ export async function POST(
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (e instanceof Error) {
+      const message = forbiddenResponseMessage(e);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
     }
     console.error(e);
     return NextResponse.json({ error: "服务器错误" }, { status: 500 });
