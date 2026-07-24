@@ -210,23 +210,12 @@ function getAssetPreview(
   return extractHtmlPreview(content, document.title);
 }
 
-function SummaryStat({
-  icon,
-  label,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-}) {
+function SummaryPill({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <div className="mt-1 text-sm font-semibold">{value}</div>
-    </div>
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+      {icon}
+      {children}
+    </span>
   );
 }
 
@@ -244,50 +233,73 @@ function StatusBadge({ uploaded }: { uploaded: boolean }) {
   );
 }
 
-function ReadStatusPanel({ summaries }: { summaries: ProjectReadSummary[] }) {
-  return (
-    <section className="rounded-xl border border-border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <UsersRound size={16} />
-            阅读查看情况
-          </h2>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            记录成员打开该需求方案的查看状态和最近查看时间。
-          </p>
-        </div>
-        <span className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">
-          {summaries.filter((item) => item.hasRead).length}/{summaries.length} 已读
-        </span>
-      </div>
+function ReadStatusSummary({ summaries }: { summaries: ProjectReadSummary[] }) {
+  const readSummaries = summaries.filter((item) => item.hasRead);
+  const previewSummaries = readSummaries.slice(0, 3);
 
-      <div className="grid divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-4">
-        {summaries.map((item) => (
-          <div key={item.userId} className="flex min-w-0 items-center gap-3 px-4 py-3">
+  return (
+    <details data-solution-read-status-panel="true" className="group relative">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-full border border-border bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-muted [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-1.5">
+          <UsersRound size={13} />
+          阅读 {readSummaries.length}/{summaries.length}
+        </span>
+        {previewSummaries.length > 0 && (
+          <span className="inline-flex items-center pl-1">
+            {previewSummaries.map((item) => (
+              <span
+                key={item.userId}
+                className="-ml-1 flex h-5 w-5 items-center justify-center rounded-full border border-background text-[10px] font-medium text-white"
+                style={{ background: item.avatarColor }}
+                title={item.displayName}
+              >
+                {item.displayName.slice(0, 1).toUpperCase()}
+              </span>
+            ))}
+          </span>
+        )}
+        <span className="text-[10px] transition-transform group-open:rotate-180">⌄</span>
+      </summary>
+
+      {readSummaries.length ? (
+        <div className="absolute left-0 z-30 mt-2 w-[min(360px,calc(100vw-40px))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-elev-2">
+          {readSummaries.map((item) => (
             <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
-              style={{ background: item.avatarColor }}
+              key={item.userId}
+              data-solution-read-status-entry="true"
+              className="flex min-w-0 items-center justify-between gap-3 border-t border-border px-3 py-2 first:border-t-0"
             >
-              {item.displayName.slice(0, 1).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="truncate text-sm font-medium">{item.displayName}</span>
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                  {item.roleLabel}
-                </span>
+              <div className="flex min-w-0 items-center gap-3">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium text-white"
+                  style={{ background: item.avatarColor }}
+                >
+                  {item.displayName.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium">{item.displayName}</span>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                      {item.roleLabel}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    最近查看于 {item.lastReadAt ? formatDate(item.lastReadAt) : "-"}
+                  </div>
+                </div>
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {item.hasRead && item.lastReadAt
-                  ? `${formatDate(item.lastReadAt)} · ${item.readCount} 次`
-                  : "未查看"}
-              </div>
+              <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                {item.readCount} 次
+              </span>
             </div>
-          </div>
-        ))}
-      </div>
-    </section>
+          ))}
+        </div>
+      ) : (
+        <div className="absolute left-0 z-30 mt-2 w-56 rounded-lg border border-border bg-popover px-3 py-3 text-sm text-muted-foreground shadow-elev-2">
+          暂无成员查看该需求方案。
+        </div>
+      )}
+    </details>
   );
 }
 
@@ -642,7 +654,6 @@ export default async function SolutionDetailPage({
 
   const canModify = currentUser ? canModifySolutions(currentUser) : false;
   const readSummaries = getProjectReadSummaries(solution.id);
-  const readUserCount = readSummaries.filter((item) => item.hasRead).length;
   const documents = db
     .select()
     .from(schema.documents)
@@ -727,36 +738,20 @@ export default async function SolutionDetailPage({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryStat
-            icon={<FileText size={13} />}
-            label="PRD"
-            value={prd ? `${prdVersions.length} 个版本` : "待上传"}
-          />
-          <SummaryStat
-            icon={<FileCode2 size={13} />}
-            label="交互原型"
-            value={prototype ? `${prototypeVersions.length} 个版本` : "待上传"}
-          />
-          <SummaryStat
-            icon={<Paperclip size={13} />}
-            label="附录"
-            value={`${appendices.length} 个`}
-          />
-          <SummaryStat
-            icon={<CheckCircle2 size={13} />}
-            label="待处理评审"
-            value={`${openIssueCount} 条`}
-          />
-          <SummaryStat
-            icon={<UsersRound size={13} />}
-            label="阅读查看"
-            value={`${readUserCount}/${readSummaries.length} 人`}
-          />
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <SummaryPill icon={<FileText size={13} />}>
+            PRD {prd ? `${prdVersions.length} 个版本` : "待上传"}
+          </SummaryPill>
+          <SummaryPill icon={<FileCode2 size={13} />}>
+            交互原型 {prototype ? `${prototypeVersions.length} 个版本` : "待上传"}
+          </SummaryPill>
+          <SummaryPill icon={<Paperclip size={13} />}>附录 {appendices.length} 个</SummaryPill>
+          <SummaryPill icon={<CheckCircle2 size={13} />}>
+            待处理评审 {openIssueCount} 条
+          </SummaryPill>
+          <ReadStatusSummary summaries={readSummaries} />
         </div>
       </header>
-
-      <ReadStatusPanel summaries={readSummaries} />
 
       <section data-solution-asset-rail="primary" className="grid gap-4 xl:grid-cols-2">
         <AssetPreviewCard

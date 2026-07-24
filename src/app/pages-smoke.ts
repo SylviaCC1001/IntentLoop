@@ -333,10 +333,19 @@ async function assertRolePermissionsAndReadTracking() {
       });
       await expectStatus(pageResponse, 200, "engineering solution page");
       const html = await pageResponse.text();
-      for (const text of ["阅读查看情况", "Role Engineering", "Role Product"]) {
+      for (const text of ["阅读 ", "Role Engineering"]) {
         if (!html.includes(text)) {
           throw new Error(`Expected engineering solution page to include ${text}`);
         }
+      }
+      const readPanelStart = html.indexOf('data-solution-read-status-panel="true"');
+      const assetRailStart = html.indexOf('data-solution-asset-rail="primary"');
+      const readPanelHtml =
+        readPanelStart >= 0 && assetRailStart > readPanelStart
+          ? html.slice(readPanelStart, assetRailStart)
+          : "";
+      if (!readPanelHtml || readPanelHtml.includes("Role Product")) {
+        throw new Error("Expected read status panel to hide accounts that have not viewed");
       }
       for (const text of ["上传 PRD", "上传原型", "上传附录"]) {
         if (html.includes(text)) {
