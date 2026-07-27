@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { ArrowLeft, FileCode2, FileText } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { canModifySolutions } from "@/lib/auth/permissions";
+import {
+  canModifySolutions,
+  canParticipateInReview,
+} from "@/lib/auth/permissions";
 import { db, schema } from "@/lib/db";
 import { recordProjectRead } from "@/lib/project-reads";
 import MarkdownEditor from "@/components/MarkdownEditor";
@@ -135,6 +138,7 @@ export default async function DocumentDetailPage({
   const query = searchParams ? await searchParams : {};
   const currentUser = await getCurrentUser();
   const canModify = currentUser ? canModifySolutions(currentUser) : false;
+  const canReview = currentUser ? canParticipateInReview(currentUser) : false;
   const document = db
     .select()
     .from(schema.documents)
@@ -154,9 +158,12 @@ export default async function DocumentDetailPage({
         : isPrototypeDocument
           ? "preview"
           : "edit";
-  const mode = !canModify && document.type === "md" && requestedMode === "edit"
-    ? "review"
-    : requestedMode;
+  const mode =
+    !canReview && isPrototypeDocument && requestedMode !== "preview"
+      ? "preview"
+      : !canModify && document.type === "md" && requestedMode === "edit"
+        ? "review"
+        : requestedMode;
 
   const project = db
     .select()
@@ -310,15 +317,16 @@ export default async function DocumentDetailPage({
           </div>
         </div>
 
-        {((document.type === "md" && mode === "review") ||
-          (isPrototypeDocument && mode !== "preview")) && (
-          <ReviewScopeNav
-            jointHref={scopeJointHref}
-            prdHref={scopePrdHref}
-            prototypeHref={scopePrototypeHref}
-            active={scopeActive}
-          />
-        )}
+        {canReview &&
+          ((document.type === "md" && mode === "review") ||
+            (isPrototypeDocument && mode !== "preview")) && (
+            <ReviewScopeNav
+              jointHref={scopeJointHref}
+              prdHref={scopePrdHref}
+              prototypeHref={scopePrototypeHref}
+              active={scopeActive}
+            />
+          )}
       </header>
 
       {document.type === "md" && mode === "edit" && (
@@ -347,6 +355,7 @@ export default async function DocumentDetailPage({
           versionId={currentVersion?.id ?? null}
           comments={openSelectionComments}
           lineAnchors={lineAnchors(content)}
+          canComment={canReview}
         />
       )}
 

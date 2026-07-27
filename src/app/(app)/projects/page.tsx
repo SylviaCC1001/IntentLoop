@@ -17,6 +17,8 @@ import { getProjectReadCounts } from "@/lib/project-reads";
 import { Badge } from "@/components/ui/badge";
 import ProjectCreateDialog from "@/components/ProjectCreateDialog";
 import ProjectActions from "@/components/ProjectActions";
+import ProjectStatusSelect from "@/components/ProjectStatusSelect";
+import { projectStatusLabels } from "@/lib/projects/status";
 
 type ProjectDocument = typeof schema.documents.$inferSelect;
 type ProjectVersion = typeof schema.versions.$inferSelect;
@@ -34,12 +36,6 @@ function formatDate(date: Date) {
     minute: "2-digit",
   }).format(date);
 }
-
-const statusLabels = {
-  draft: "起草中",
-  reviewed: "已评审",
-  revised: "新修订",
-} as const;
 
 const statusVariants = {
   draft: "secondary" as const,
@@ -468,15 +464,21 @@ export default async function ProjectsPage() {
           </div>
         </section>
       ) : (
-        <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        <section className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
           {projects.map((project) => {
             const projectDocuments = documentsByProject.get(project.id) ?? [];
             const assetCounts = getAssetCounts(projectDocuments);
             return (
-              <div
+              <article
                 key={project.id}
-                className="group relative rounded-2xl transition-transform duration-300 hover:-translate-y-1"
+                data-project-card-density="compact"
+                className="group relative grid min-h-[184px] grid-cols-[164px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border bg-card shadow-elev-1 transition-all duration-300 hover:-translate-y-1 hover:shadow-elev-2"
               >
+                <Link
+                  href={`/solutions/${project.id}`}
+                  aria-label={`打开需求方案：${project.name}`}
+                  className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
                 {canModify && (
                   <div className="absolute right-2.5 top-2.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                     <div className="rounded-lg bg-card/85 backdrop-blur-sm shadow-elev-1">
@@ -491,67 +493,73 @@ export default async function ProjectsPage() {
                     </div>
                   </div>
                 )}
-                <Link
-                  data-project-card-density="compact"
-                  href={`/solutions/${project.id}`}
-                  className="grid h-full min-h-[184px] grid-cols-[164px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border bg-card shadow-elev-1 transition-shadow hover:shadow-elev-2"
-                >
+                <div className="pointer-events-none relative z-10">
                   <ProjectAssetStack
                     documents={projectDocuments}
                     versionsByDocument={currentVersionsByDocument}
                     projectName={project.name}
                     color={project.color}
                   />
+                </div>
 
-                  <div className="flex min-w-0 flex-col p-4 pr-11">
-                    <div className="mb-2 flex items-start gap-2">
-                      <h2 className="min-w-0 flex-1 truncate text-base font-semibold">
-                        {project.name}
-                      </h2>
-                      <Badge variant={statusVariants[project.status]} className="shrink-0">
-                        {statusLabels[project.status]}
-                      </Badge>
-                    </div>
-
-                    {project.description ? (
-                      <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                        {project.description}
-                      </p>
-                    ) : (
-                      <p className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
-                        暂无描述
-                      </p>
-                    )}
-
-                    <div className="mt-auto grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 pt-4">
-                      <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                          <FileText size={12} />
-                          PRD {assetCounts.prd}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-md bg-sky-100 px-2 py-1 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-                          <FileCode2 size={12} />
-                          原型 {assetCounts.prototype}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                          <Paperclip size={12} />
-                          附录 {assetCounts.appendix}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                          <Eye size={12} />
-                          已读 {readCountsByProject.get(project.id) ?? 0}
-                        </span>
-                      </div>
-                      <time
-                        dateTime={project.updatedAt.toISOString()}
-                        className="text-right text-xs text-muted-foreground"
-                      >
-                        更新 {formatDate(project.updatedAt)}
-                      </time>
+                <div className="pointer-events-none relative z-10 flex min-w-0 flex-col p-4 pr-11">
+                  <div className="mb-2 flex items-start gap-2">
+                    <h2 className="min-w-0 flex-1 truncate text-base font-semibold">
+                      {project.name}
+                    </h2>
+                    <div className="pointer-events-auto">
+                      {canModify ? (
+                        <ProjectStatusSelect
+                          projectId={project.id}
+                          projectName={project.name}
+                          status={project.status}
+                        />
+                      ) : (
+                        <Badge variant={statusVariants[project.status]} className="shrink-0">
+                          {projectStatusLabels[project.status]}
+                        </Badge>
+                      )}
                     </div>
                   </div>
-                </Link>
-              </div>
+
+                  {project.description ? (
+                    <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                      {project.description}
+                    </p>
+                  ) : (
+                    <p className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
+                      暂无描述
+                    </p>
+                  )}
+
+                  <div className="mt-auto grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 pt-4">
+                    <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <FileText size={12} />
+                        PRD {assetCounts.prd}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md bg-sky-100 px-2 py-1 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                        <FileCode2 size={12} />
+                        原型 {assetCounts.prototype}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                        <Paperclip size={12} />
+                        附录 {assetCounts.appendix}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <Eye size={12} />
+                        已读 {readCountsByProject.get(project.id) ?? 0}
+                      </span>
+                    </div>
+                    <time
+                      dateTime={project.updatedAt.toISOString()}
+                      className="text-right text-xs text-muted-foreground"
+                    >
+                      更新 {formatDate(project.updatedAt)}
+                    </time>
+                  </div>
+                </div>
+              </article>
             );
           })}
         </section>

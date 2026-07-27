@@ -5,8 +5,15 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import { projectStatuses } from "@/lib/projects/status";
 
-export const userRoles = ["admin", "product", "engineering", "design"] as const;
+export const userRoles = [
+  "admin",
+  "product",
+  "engineering",
+  "design",
+  "visitor",
+] as const;
 export type UserRole = (typeof userRoles)[number];
 
 // ========== 用户 ==========
@@ -30,7 +37,7 @@ export const projects = sqliteTable("projects", {
   name: text("name").notNull(),
   description: text("description"),
   color: text("color").notNull().default("#6366f1"), // 项目主色
-  status: text("status", { enum: ["draft", "reviewed", "revised"] })
+  status: text("status", { enum: projectStatuses })
     .notNull()
     .default("draft"), // 方案状态:起草中/已评审/新修订
   createdBy: text("created_by")

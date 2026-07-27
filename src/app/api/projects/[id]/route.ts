@@ -8,11 +8,13 @@ import {
 } from "@/lib/auth/permissions";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { projectStatuses } from "@/lib/projects/status";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(64).optional(),
   description: z.string().nullable().optional(),
   color: z.string().optional(),
+  status: z.enum(projectStatuses).optional(),
 });
 
 export async function GET(
@@ -49,11 +51,24 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
     const data = updateSchema.parse(body);
+    const project = db
+      .select({ id: schema.projects.id })
+      .from(schema.projects)
+      .where(eq(schema.projects.id, id))
+      .get();
+    if (!project) {
+      return NextResponse.json({ error: "项目不存在" }, { status: 404 });
+    }
     db.update(schema.projects)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(schema.projects.id, id))
       .run();
-    return NextResponse.json({ ok: true });
+    const updatedProject = db
+      .select()
+      .from(schema.projects)
+      .where(eq(schema.projects.id, id))
+      .get();
+    return NextResponse.json({ ok: true, project: updatedProject });
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });

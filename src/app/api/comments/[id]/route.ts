@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { deleteComment, updateComment } from "@/lib/comments";
+import {
+  assertCanParticipateInReview,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
 
 const updateSchema = z.object({
   body: z.string().min(1).max(2000).optional(),
@@ -17,6 +21,12 @@ function toErrorResponse(error: unknown) {
   }
   if (error instanceof Error && error.message === "COMMENT_FORBIDDEN") {
     return NextResponse.json({ error: "无权操作该评论" }, { status: 403 });
+  }
+  if (error instanceof Error) {
+    const message = forbiddenResponseMessage(error);
+    if (message) {
+      return NextResponse.json({ error: message }, { status: 403 });
+    }
   }
   if (error instanceof z.ZodError) {
     return NextResponse.json(
@@ -35,6 +45,7 @@ export async function PATCH(
 ) {
   try {
     const user = await requireAuth();
+    assertCanParticipateInReview(user);
     const { id } = await params;
     const data = updateSchema.parse(await req.json());
     const comment = updateComment(id, user, data);
@@ -51,6 +62,7 @@ export async function DELETE(
 ) {
   try {
     const user = await requireAuth();
+    assertCanParticipateInReview(user);
     const { id } = await params;
     deleteComment(id, user);
 

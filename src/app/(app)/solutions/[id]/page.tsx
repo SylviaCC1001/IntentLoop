@@ -20,7 +20,11 @@ import {
   UsersRound,
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { canModifySolutions } from "@/lib/auth/permissions";
+import {
+  canDownloadAssets,
+  canModifySolutions,
+  canParticipateInReview,
+} from "@/lib/auth/permissions";
 import { db, schema } from "@/lib/db";
 import {
   getProjectReadSummaries,
@@ -569,18 +573,20 @@ function AssetPreviewCard({
               selectedVersionId={current?.id ?? null}
               className="h-8"
             />
-            <DocumentActions
-              document={{
-                id: document.id,
-                title: document.title,
-                description: document.description,
-                priority: document.priority,
-              }}
-              exportHref={exportHref}
-              exportLabel={exportLabel}
-              canModify={canModify}
-              className="h-8"
-            />
+            {(canModify || exportHref) && (
+              <DocumentActions
+                document={{
+                  id: document.id,
+                  title: document.title,
+                  description: document.description,
+                  priority: document.priority,
+                }}
+                exportHref={exportHref}
+                exportLabel={exportLabel}
+                canModify={canModify}
+                className="h-8"
+              />
+            )}
           </div>
         )}
       </div>
@@ -649,11 +655,13 @@ function AppendixSection({
   appendices,
   versionsByDocument,
   canModify,
+  canDownload,
 }: {
   solutionId: string;
   appendices: AssetDocument[];
   versionsByDocument: Map<string, AssetVersion[]>;
   canModify: boolean;
+  canDownload: boolean;
 }) {
   return (
     <section className="rounded-md border border-border bg-card">
@@ -701,22 +709,29 @@ function AppendixSection({
                     </div>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2 md:justify-end">
-                  {canModify && (
-                    <DocumentActions
-                      document={{
-                        id: appendix.id,
-                        title: appendix.title,
-                        description: appendix.description,
-                        priority: appendix.priority,
-                      }}
-                      canModify={canModify}
-                    />
-                  )}
-                  <Link href={`/api/appendices/${appendix.id}/download`} className={textButtonClass()}>
-                    下载
-                  </Link>
-                </div>
+                {(canModify || canDownload) && (
+                  <div className="flex shrink-0 items-center gap-2 md:justify-end">
+                    {canModify && (
+                      <DocumentActions
+                        document={{
+                          id: appendix.id,
+                          title: appendix.title,
+                          description: appendix.description,
+                          priority: appendix.priority,
+                        }}
+                        canModify={canModify}
+                      />
+                    )}
+                    {canDownload && (
+                      <Link
+                        href={`/api/appendices/${appendix.id}/download`}
+                        className={textButtonClass()}
+                      >
+                        下载
+                      </Link>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })
@@ -755,6 +770,8 @@ export default async function SolutionDetailPage({
   }
 
   const canModify = currentUser ? canModifySolutions(currentUser) : false;
+  const canReview = currentUser ? canParticipateInReview(currentUser) : false;
+  const canDownload = currentUser ? canDownloadAssets(currentUser) : false;
   const readSummaries = getProjectReadSummaries(solution.id);
   const documents = db
     .select()
@@ -836,29 +853,31 @@ export default async function SolutionDetailPage({
 
           <div className="flex w-full shrink-0 flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
             <ReadStatusSummary summaries={readSummaries} />
-            <ReviewEntryButton href={reviewEntryHref} />
-            <span className="group relative inline-flex">
-              <a
-                href={`/api/solutions/${solution.id}/review-context`}
-                aria-label="下载评审上下文"
-                aria-describedby="review-context-download-tooltip"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Download size={15} />
-              </a>
-              <span
-                id="review-context-download-tooltip"
-                role="tooltip"
-                className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-64 rounded-md border border-border bg-popover px-3 py-2 text-left opacity-0 shadow-elev-2 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-              >
-                <span className="block text-xs font-medium text-popover-foreground">
-                  下载评审上下文
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                  包含当前 PRD、交互原型版本及评审记录。
+            {canReview && <ReviewEntryButton href={reviewEntryHref} />}
+            {canDownload && (
+              <span className="group relative inline-flex">
+                <a
+                  href={`/api/solutions/${solution.id}/review-context`}
+                  aria-label="下载评审上下文"
+                  aria-describedby="review-context-download-tooltip"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Download size={15} />
+                </a>
+                <span
+                  id="review-context-download-tooltip"
+                  role="tooltip"
+                  className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-64 rounded-md border border-border bg-popover px-3 py-2 text-left opacity-0 shadow-elev-2 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                >
+                  <span className="block text-xs font-medium text-popover-foreground">
+                    下载评审上下文
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    包含当前 PRD、交互原型版本及评审记录。
+                  </span>
                 </span>
               </span>
-            </span>
+            )}
           </div>
         </div>
       </header>
@@ -912,9 +931,9 @@ export default async function SolutionDetailPage({
                 ) : null
               }
               primaryHref={prd ? `/docs/${prd.id}?mode=${canModify ? "edit" : "review"}` : undefined}
-              primaryLabel={canModify ? "编辑" : "评审"}
+              primaryLabel={canModify ? "编辑" : canReview ? "评审" : "查看"}
               exportHref={
-                prd && selectedPrdVersion
+                canDownload && prd && selectedPrdVersion
                   ? `/api/documents/${prd.id}/versions/${selectedPrdVersion.id}/download`
                   : undefined
               }
@@ -950,7 +969,7 @@ export default async function SolutionDetailPage({
               }
               primaryLabel="预览"
               exportHref={
-                prototype && selectedPrototypeVersion
+                canDownload && prototype && selectedPrototypeVersion
                   ? `/api/documents/${prototype.id}/versions/${selectedPrototypeVersion.id}/download`
                   : undefined
               }
@@ -964,6 +983,7 @@ export default async function SolutionDetailPage({
             appendices={appendices}
             versionsByDocument={versionsByDocument}
             canModify={canModify}
+            canDownload={canDownload}
           />
         </TabsContent>
 
@@ -972,7 +992,7 @@ export default async function SolutionDetailPage({
           forceMount
           className="mt-3 data-[state=inactive]:hidden"
         >
-          <ReviewIssueLedger issues={reviewIssues} />
+          <ReviewIssueLedger issues={reviewIssues} canManageIssues={canReview} />
         </TabsContent>
 
         <TabsContent

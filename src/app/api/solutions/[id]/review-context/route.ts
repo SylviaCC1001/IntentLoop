@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import {
+  assertCanDownloadAssets,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
+import {
   formatReviewContextMarkdown,
   getSolutionReviewData,
 } from "@/lib/solution-review";
@@ -10,7 +14,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
+    assertCanDownloadAssets(user);
     const { id } = await params;
     const data = getSolutionReviewData(id);
     if (!data) {
@@ -32,6 +37,12 @@ export async function GET(
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (error instanceof Error) {
+      const message = forbiddenResponseMessage(error);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
     }
     console.error(error);
     return NextResponse.json({ error: "服务器错误" }, { status: 500 });

@@ -19,6 +19,7 @@ import {
 
 type ReviewIssueLedgerProps = {
   issues: SolutionReviewIssue[];
+  canManageIssues?: boolean;
   /** 嵌入 Sheet 时隐藏自带标题头与外层卡片边框，避免与 SheetHeader 重复 */
   embedded?: boolean;
 };
@@ -47,7 +48,11 @@ function statusClass(status: ReviewIssueStatus) {
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
-export default function ReviewIssueLedger({ issues, embedded = false }: ReviewIssueLedgerProps) {
+export default function ReviewIssueLedger({
+  issues,
+  canManageIssues = true,
+  embedded = false,
+}: ReviewIssueLedgerProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<IssueFilter>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -206,7 +211,7 @@ export default function ReviewIssueLedger({ issues, embedded = false }: ReviewIs
                       <ExternalLink size={13} />
                       定位
                     </Link>
-                    {issue.status !== "open" && (
+                    {canManageIssues && issue.status !== "open" && (
                       <button
                         type="button"
                         onClick={() => updateStatus(issue.id, "open")}
@@ -217,7 +222,7 @@ export default function ReviewIssueLedger({ issues, embedded = false }: ReviewIs
                         重开
                       </button>
                     )}
-                    {issue.status === "open" && (
+                    {canManageIssues && issue.status === "open" && (
                       <button
                         type="button"
                         onClick={() => updateStatus(issue.id, "handled")}
@@ -234,17 +239,23 @@ export default function ReviewIssueLedger({ issues, embedded = false }: ReviewIs
                         等待确认
                       </span>
                     )}
-                    {issue.status !== "closed" && issue.status !== "resolved" && (
-                      <button
-                        type="button"
-                        onClick={() => updateStatus(issue.id, "closed")}
-                        disabled={busy}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-                      >
-                        {busy ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
-                        关闭
-                      </button>
-                    )}
+                    {canManageIssues &&
+                      issue.status !== "closed" &&
+                      issue.status !== "resolved" && (
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(issue.id, "closed")}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                        >
+                          {busy ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <XCircle size={13} />
+                          )}
+                          关闭
+                        </button>
+                      )}
                   </div>
                 </div>
               </article>

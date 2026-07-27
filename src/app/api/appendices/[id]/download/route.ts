@@ -3,6 +3,10 @@ import path from "path";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import {
+  assertCanDownloadAssets,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
 import { db, schema } from "@/lib/db";
 
 const contentTypes: Record<string, string> = {
@@ -28,7 +32,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
+    assertCanDownloadAssets(user);
     const { id } = await params;
     const appendix = db
       .select()
@@ -72,6 +77,12 @@ export async function GET(
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (e instanceof Error) {
+      const message = forbiddenResponseMessage(e);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
     }
     console.error(e);
     return NextResponse.json({ error: "服务器错误" }, { status: 500 });
