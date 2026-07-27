@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import {
   ArrowLeft,
-  CheckCircle2,
   Download,
   Eye,
   FileArchive,
@@ -12,7 +11,6 @@ import {
   FileText,
   FileUp,
   MessageSquareText,
-  Paperclip,
   UploadCloud,
   UsersRound,
 } from "lucide-react";
@@ -279,21 +277,12 @@ function getAssetPreview(
   return extractHtmlPreview(content, document.title);
 }
 
-function SummaryItem({ icon, children }: { icon: ReactNode; children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      {icon}
-      {children}
-    </span>
-  );
-}
-
 function ReadStatusSummary({ summaries }: { summaries: ProjectReadSummary[] }) {
   const readSummaries = summaries.filter((item) => item.hasRead);
   const previewSummaries = readSummaries.slice(0, 3);
 
   return (
-    <details data-solution-read-status-panel="true" className="group relative">
+    <details data-solution-read-status-panel="true" className="group relative shrink-0">
       <summary className="inline-flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-primary hover:text-foreground [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-1.5">
           <UsersRound size={13} />
@@ -317,7 +306,7 @@ function ReadStatusSummary({ summaries }: { summaries: ProjectReadSummary[] }) {
       </summary>
 
       {readSummaries.length ? (
-        <div className="absolute left-0 z-30 mt-2 w-[min(360px,calc(100vw-40px))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-elev-2">
+        <div className="absolute right-0 z-30 mt-2 w-[min(360px,calc(100vw-40px))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-elev-2">
           {readSummaries.map((item) => (
             <div
               key={item.userId}
@@ -350,7 +339,7 @@ function ReadStatusSummary({ summaries }: { summaries: ProjectReadSummary[] }) {
           ))}
         </div>
       ) : (
-        <div className="absolute left-0 z-30 mt-2 w-56 rounded-lg border border-border bg-popover px-3 py-3 text-sm text-muted-foreground shadow-elev-2">
+        <div className="absolute right-0 z-30 mt-2 w-56 rounded-lg border border-border bg-popover px-3 py-3 text-sm text-muted-foreground shadow-elev-2">
           暂无成员查看该需求方案。
         </div>
       )}
@@ -800,31 +789,34 @@ export default async function SolutionDetailPage({
 
   return (
     <div data-solution-detail-layout="workspace" className="p-5">
-      <header>
-        <Link
-          href="/projects"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft size={14} />
-          需求方案
-        </Link>
-
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-2xl font-semibold">{solution.name}</h1>
-              <span className="text-xs text-muted-foreground">
+      <header data-solution-detail-header="compact">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="w-full min-w-0 md:w-auto md:flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <Link
+                href="/projects"
+                aria-label="返回需求方案列表"
+                title="返回需求方案列表"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <ArrowLeft size={17} />
+              </Link>
+              <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold md:flex-none">
+                {solution.name}
+              </h1>
+              <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
                 更新于 {formatDate(solution.updatedAt)}
               </span>
+              <ReadStatusSummary summaries={readSummaries} />
             </div>
             {solution.description && (
-              <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
+              <p className="mt-1 line-clamp-1 max-w-3xl pl-10 text-sm text-muted-foreground">
                 {solution.description}
               </p>
             )}
           </div>
 
-          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <div className="flex w-full shrink-0 flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
             <ReviewEntryButton href={reviewEntryHref} />
             <ReviewLedgerSheet issues={reviewIssues} openCount={openIssueCount} compact />
             <a
@@ -837,23 +829,9 @@ export default async function SolutionDetailPage({
             </a>
           </div>
         </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-border py-2.5">
-          <SummaryItem icon={<FileText size={13} />}>
-            PRD {prd ? `${prdVersions.length} 个版本` : "待上传"}
-          </SummaryItem>
-          <SummaryItem icon={<FileCode2 size={13} />}>
-            交互原型 {prototype ? `${prototypeVersions.length} 个版本` : "待上传"}
-          </SummaryItem>
-          <SummaryItem icon={<Paperclip size={13} />}>附录 {appendices.length} 个</SummaryItem>
-          <SummaryItem icon={<CheckCircle2 size={13} />}>
-            待处理评审 {openIssueCount} 条
-          </SummaryItem>
-          <ReadStatusSummary summaries={readSummaries} />
-        </div>
       </header>
 
-      <Tabs defaultValue="assets" className="mt-0">
+      <Tabs defaultValue="assets" className="mt-1">
         <TabsList
           data-solution-detail-tabs="true"
           className="h-auto w-full justify-start gap-5 rounded-none border-b border-border bg-transparent p-0"

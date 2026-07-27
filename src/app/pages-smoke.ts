@@ -610,6 +610,7 @@ async function assertSolutionAssetStructure() {
       }
       for (const marker of [
         'data-solution-detail-layout="workspace"',
+        'data-solution-detail-header="compact"',
         'data-solution-review-entry="header"',
         'data-solution-detail-tabs="true"',
         'data-solution-asset-rail="primary"',
@@ -622,6 +623,11 @@ async function assertSolutionAssetStructure() {
       }
       if (emptyHtml.includes("项目")) {
         throw new Error("Expected solution detail to avoid project wording");
+      }
+      for (const removedSummary of ["附录 0 个", "待处理评审 0 条"]) {
+        if (emptyHtml.includes(removedSummary)) {
+          throw new Error(`Expected compact header to omit ${removedSummary}`);
+        }
       }
 
       const prototypeOnly = await postSolutionAsset(cookie, {
