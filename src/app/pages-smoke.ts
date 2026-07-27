@@ -597,6 +597,9 @@ async function assertSolutionAssetStructure() {
         "PRD",
         "交互原型",
         "附录说明",
+        "资产",
+        "评审记录",
+        "活动",
         "上传 PRD",
         "上传原型",
         "上传附录",
@@ -608,8 +611,10 @@ async function assertSolutionAssetStructure() {
       for (const marker of [
         'data-solution-detail-layout="workspace"',
         'data-solution-review-entry="header"',
+        'data-solution-detail-tabs="true"',
         'data-solution-asset-rail="primary"',
         'data-solution-appendix-list="compact"',
+        'data-solution-activity-feed="true"',
       ]) {
         if (!emptyHtml.includes(marker)) {
           throw new Error(`Expected solution detail workspace layout marker ${marker}`);
@@ -767,6 +772,7 @@ async function assertSolutionAssetStructure() {
         "版本历史",
         "编辑",
         "预览",
+        "新增版本",
         "mode=joint",
         "mode=preview",
         `version=${protoV2Id}`,

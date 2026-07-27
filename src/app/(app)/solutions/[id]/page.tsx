@@ -10,6 +10,8 @@ import {
   FileArchive,
   FileCode2,
   FileText,
+  FileUp,
+  MessageSquareText,
   Paperclip,
   UploadCloud,
   UsersRound,
@@ -24,9 +26,11 @@ import {
 } from "@/lib/project-reads";
 import { getSolutionReviewData } from "@/lib/solution-review";
 import ReviewLedgerSheet from "@/components/ReviewLedgerSheet";
+import ReviewIssueLedger from "@/components/ReviewIssueLedger";
 import AssetVersionSheet from "@/components/AssetVersionSheet";
 import SolutionAssetUploadDialog from "@/components/SolutionAssetUploadDialog";
 import DocumentActions from "@/components/DocumentActions";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type AssetDocument = typeof schema.documents.$inferSelect;
 type AssetVersion = typeof schema.versions.$inferSelect;
@@ -34,6 +38,14 @@ type PreviewKind = "md" | "html";
 type AssetPreview = {
   title: string;
   lines: string[];
+};
+type SolutionActivity = {
+  id: string;
+  kind: "version" | "review" | "read";
+  title: string;
+  detail: string;
+  occurredAt: Date;
+  href?: string;
 };
 
 function formatDate(date: Date) {
@@ -49,6 +61,63 @@ function formatSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function buildSolutionActivities({
+  documents,
+  versions,
+  issues,
+  reads,
+}: {
+  documents: AssetDocument[];
+  versions: AssetVersion[];
+  issues: NonNullable<ReturnType<typeof getSolutionReviewData>>["issues"];
+  reads: ProjectReadSummary[];
+}) {
+  const documentById = new Map(documents.map((document) => [document.id, document]));
+  const userById = new Map(reads.map((read) => [read.userId, read.displayName]));
+
+  const versionActivities: SolutionActivity[] = versions.flatMap((version) => {
+    const document = documentById.get(version.documentId);
+    if (!document) return [];
+    const author = userById.get(version.createdBy);
+    return [
+      {
+        id: `version-${version.id}`,
+        kind: "version",
+        title: `${document.title} 新增版本`,
+        detail: [author, version.message || null, formatSize(version.size)]
+          .filter(Boolean)
+          .join(" · "),
+        occurredAt: version.createdAt,
+      },
+    ];
+  });
+  const reviewActivities: SolutionActivity[] = issues.map((issue) => ({
+    id: `review-${issue.id}`,
+    kind: "review",
+    title: `${issue.authorName} 提交评审意见`,
+    detail: `${issue.documentType} · ${issue.body}`,
+    occurredAt: new Date(issue.createdAt),
+    href: issue.href,
+  }));
+  const readActivities: SolutionActivity[] = reads.flatMap((read) =>
+    read.hasRead && read.lastReadAt
+      ? [
+          {
+            id: `read-${read.userId}`,
+            kind: "read" as const,
+            title: `${read.displayName} 查看了需求方案`,
+            detail: `累计查看 ${read.readCount} 次`,
+            occurredAt: read.lastReadAt,
+          },
+        ]
+      : []
+  );
+
+  return [...versionActivities, ...reviewActivities, ...readActivities]
+    .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
+    .slice(0, 30);
 }
 
 function getCurrentVersion(document: AssetDocument | null, versions: AssetVersion[]) {
@@ -210,25 +279,11 @@ function getAssetPreview(
   return extractHtmlPreview(content, document.title);
 }
 
-function SummaryPill({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+function SummaryItem({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       {icon}
       {children}
-    </span>
-  );
-}
-
-function StatusBadge({ uploaded }: { uploaded: boolean }) {
-  return (
-    <span
-      className={
-        uploaded
-          ? "rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
-          : "rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-      }
-    >
-      {uploaded ? "已上传" : "待上传"}
     </span>
   );
 }
@@ -239,7 +294,7 @@ function ReadStatusSummary({ summaries }: { summaries: ProjectReadSummary[] }) {
 
   return (
     <details data-solution-read-status-panel="true" className="group relative">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-full border border-border bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-muted [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-primary hover:text-foreground [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-1.5">
           <UsersRound size={13} />
           阅读 {readSummaries.length}/{summaries.length}
@@ -309,10 +364,10 @@ function ReviewEntryButton({ href }: { href: string | null }) {
       <span
         data-solution-review-entry="header"
         aria-disabled="true"
-        className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground opacity-45"
+        className="inline-flex h-9 cursor-not-allowed items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground opacity-45"
       >
         <Eye size={14} />
-        评审
+        进入评审
       </span>
     );
   }
@@ -321,10 +376,10 @@ function ReviewEntryButton({ href }: { href: string | null }) {
     <Link
       data-solution-review-entry="header"
       href={href}
-      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+      className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
     >
       <Eye size={14} />
-      评审
+      进入评审
     </Link>
   );
 }
@@ -342,7 +397,7 @@ function RenderedPreview({
 }) {
   if (empty) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-xl border border-dashed border-border bg-background text-sm text-muted-foreground">
+      <div className="flex min-h-[360px] items-center justify-center border-y border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
           <UploadCloud className="h-4 w-4" />
           上传后显示最新页面切图
@@ -355,7 +410,7 @@ function RenderedPreview({
     return (
       <div
         data-solution-render-preview="html"
-        className="overflow-hidden rounded-xl border border-border bg-slate-950"
+        className="overflow-hidden border-y border-border bg-slate-950"
       >
         <div className="flex h-7 items-center gap-1 border-b border-white/10 bg-slate-900 px-3">
           <span className="h-2 w-2 rounded-full bg-red-400" />
@@ -397,9 +452,9 @@ function RenderedPreview({
   return (
     <div
       data-solution-render-preview="md"
-      className="min-h-[360px] rounded-xl border border-border bg-slate-100 p-5"
+      className="min-h-[360px] border-y border-border bg-slate-100 p-3"
     >
-      <div className="mx-auto min-h-[316px] max-w-[82%] rounded-lg bg-white px-6 py-6 shadow-sm">
+      <div className="mx-auto min-h-[336px] max-w-[96%] rounded-sm bg-white px-5 py-5 shadow-sm">
         <div className="mb-3 h-2 w-16 rounded-full bg-slate-200" />
         <h3 className="line-clamp-2 text-xl font-semibold text-slate-950">{preview.title}</h3>
         <div className="mt-4 space-y-2">
@@ -417,7 +472,6 @@ function RenderedPreview({
 function AssetPreviewCard({
   kind,
   label,
-  description,
   icon,
   document,
   versions,
@@ -431,7 +485,6 @@ function AssetPreviewCard({
 }: {
   kind: PreviewKind;
   label: string;
-  description: string;
   icon: ReactNode;
   document: AssetDocument | null;
   versions: AssetVersion[];
@@ -450,20 +503,14 @@ function AssetPreviewCard({
   return (
     <section
       data-solution-asset-card={kind}
-      className="overflow-hidden rounded-xl border border-border bg-card"
+      className="overflow-hidden rounded-md border border-border bg-card"
     >
-      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="flex min-w-0 gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="shrink-0 text-muted-foreground">
             {icon}
           </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold">{label}</h2>
-              <StatusBadge uploaded={Boolean(document)} />
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-          </div>
+          <h2 className="truncate text-sm font-semibold">{label}</h2>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
           {primaryHref && primaryLabel && (
@@ -475,64 +522,115 @@ function AssetPreviewCard({
         </div>
       </div>
 
-      <div className="p-4">
-        <RenderedPreview
-          kind={kind}
-          preview={preview}
-          empty={!document}
-          prototypePreviewSrc={prototypePreviewSrc}
-        />
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{document?.title ?? label}</div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>{current ? formatSize(current.size) : "暂无文件"}</span>
-              {document && <span>更新于 {formatDate(document.updatedAt)}</span>}
-            </div>
-          </div>
-          {document && (
-            <div
-              data-solution-asset-footer-actions={kind}
-              className="ml-auto flex shrink-0 items-center justify-end gap-2"
-            >
-              <AssetVersionSheet
-                documentTitle={document.title}
-                versions={versions.map((version) => ({
-                  id: version.id,
-                  message: version.message,
-                  size: version.size,
-                  createdAt: version.createdAt,
-                  href:
-                    kind === "md"
-                      ? solutionVersionHref({
-                          solutionId: document.projectId,
-                          prdVersionId: version.id,
-                        })
-                      : solutionVersionHref({
-                          solutionId: document.projectId,
-                          prototypeVersionId: version.id,
-                        }),
-                }))}
-                currentVersionId={document.currentVersionId}
-                selectedVersionId={current?.id ?? null}
-                className="h-8"
-              />
-              <DocumentActions
-                document={{
-                  id: document.id,
-                  title: document.title,
-                  description: document.description,
-                  priority: document.priority,
-                }}
-                exportHref={exportHref}
-                exportLabel={exportLabel}
-                canModify={canModify}
-                className="h-8"
-              />
-            </div>
-          )}
+      <RenderedPreview
+        kind={kind}
+        preview={preview}
+        empty={!document}
+        prototypePreviewSrc={prototypePreviewSrc}
+      />
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 px-3 py-2">
+        <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>{current ? formatSize(current.size) : "暂无文件"}</span>
+          {document && <span>更新于 {formatDate(document.updatedAt)}</span>}
         </div>
+        {document && (
+          <div
+            data-solution-asset-footer-actions={kind}
+            className="ml-auto flex shrink-0 items-center justify-end gap-2"
+          >
+            <AssetVersionSheet
+              documentTitle={document.title}
+              versions={versions.map((version) => ({
+                id: version.id,
+                message: version.message,
+                size: version.size,
+                createdAt: version.createdAt,
+                href:
+                  kind === "md"
+                    ? solutionVersionHref({
+                        solutionId: document.projectId,
+                        prdVersionId: version.id,
+                      })
+                    : solutionVersionHref({
+                        solutionId: document.projectId,
+                        prototypeVersionId: version.id,
+                      }),
+              }))}
+              currentVersionId={document.currentVersionId}
+              selectedVersionId={current?.id ?? null}
+              className="h-8"
+            />
+            <DocumentActions
+              document={{
+                id: document.id,
+                title: document.title,
+                description: document.description,
+                priority: document.priority,
+              }}
+              exportHref={exportHref}
+              exportLabel={exportLabel}
+              canModify={canModify}
+              className="h-8"
+            />
+          </div>
+        )}
       </div>
+    </section>
+  );
+}
+
+function ActivityFeed({ activities }: { activities: SolutionActivity[] }) {
+  return (
+    <section
+      data-solution-activity-feed="true"
+      className="overflow-hidden rounded-md border border-border bg-card"
+    >
+      {activities.length ? (
+        <div className="divide-y divide-border">
+          {activities.map((activity) => {
+            const Icon =
+              activity.kind === "version"
+                ? FileUp
+                : activity.kind === "review"
+                  ? MessageSquareText
+                  : Eye;
+            const content = (
+              <>
+                <span className="mt-0.5 shrink-0 text-muted-foreground">
+                  <Icon size={15} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">{activity.title}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                    {activity.detail}
+                  </span>
+                </span>
+                <time className="shrink-0 text-xs text-muted-foreground">
+                  {formatDate(activity.occurredAt)}
+                </time>
+              </>
+            );
+
+            return activity.href ? (
+              <Link
+                key={activity.id}
+                href={activity.href}
+                className="flex items-start gap-3 px-3 py-2.5 hover:bg-muted/40"
+              >
+                {content}
+              </Link>
+            ) : (
+              <div key={activity.id} className="flex items-start gap-3 px-3 py-2.5">
+                {content}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+          暂无活动记录。
+        </div>
+      )}
     </section>
   );
 }
@@ -549,14 +647,9 @@ function AppendixSection({
   canModify: boolean;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold">附录说明</h2>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            图片、Excel、PDF 或其他补充材料；附录不做版本历史。
-          </p>
-        </div>
+    <section className="rounded-md border border-border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+        <h2 className="truncate text-sm font-semibold">附录说明</h2>
         {canModify && (
           <SolutionAssetUploadDialog
             solutionId={solutionId}
@@ -582,10 +675,10 @@ function AppendixSection({
             return (
               <div
                 key={appendix.id}
-                className="grid gap-3 px-4 py-3 hover:bg-muted/40 md:grid-cols-[minmax(0,1fr)_auto]"
+                className="grid gap-3 px-3 py-2.5 hover:bg-muted/40 md:grid-cols-[minmax(0,1fr)_auto]"
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                     <FileArchive size={16} />
                   </div>
                   <div className="min-w-0">
@@ -619,7 +712,7 @@ function AppendixSection({
             );
           })
         ) : (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="px-3 py-6 text-center text-sm text-muted-foreground">
             还没有附录说明。上传补充材料后会在这里聚合展示。
           </div>
         )}
@@ -698,28 +791,34 @@ export default async function SolutionDetailPage({
     ? prototypeModeHref(prototype.id, "joint", selectedPrototypeVersion?.id)
     : null;
   const reviewEntryHref = jointReviewHref ?? prdReviewHref ?? prototypeReviewHref;
+  const activities = buildSolutionActivities({
+    documents,
+    versions: reviewData?.versions ?? [],
+    issues: reviewIssues,
+    reads: readSummaries,
+  });
 
   return (
-    <div data-solution-detail-layout="workspace" className="space-y-5 p-5">
-      <header className="border-b border-border pb-5">
+    <div data-solution-detail-layout="workspace" className="p-5">
+      <header>
         <Link
           href="/projects"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft size={16} />
-          返回需求方案列表
+          <ArrowLeft size={14} />
+          需求方案
         </Link>
 
-        <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-2xl font-semibold">{solution.name}</h1>
-              <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 更新于 {formatDate(solution.updatedAt)}
               </span>
             </div>
             {solution.description && (
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
                 {solution.description}
               </p>
             )}
@@ -727,110 +826,153 @@ export default async function SolutionDetailPage({
 
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
             <ReviewEntryButton href={reviewEntryHref} />
-            <ReviewLedgerSheet issues={reviewIssues} openCount={openIssueCount} />
+            <ReviewLedgerSheet issues={reviewIssues} openCount={openIssueCount} compact />
             <a
               href={`/api/solutions/${solution.id}/review-context`}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted"
+              aria-label="导出评审上下文"
+              title="导出评审上下文"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background hover:bg-muted"
             >
-              <Download size={14} />
-              导出评审上下文
+              <Download size={15} />
             </a>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <SummaryPill icon={<FileText size={13} />}>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-border py-2.5">
+          <SummaryItem icon={<FileText size={13} />}>
             PRD {prd ? `${prdVersions.length} 个版本` : "待上传"}
-          </SummaryPill>
-          <SummaryPill icon={<FileCode2 size={13} />}>
+          </SummaryItem>
+          <SummaryItem icon={<FileCode2 size={13} />}>
             交互原型 {prototype ? `${prototypeVersions.length} 个版本` : "待上传"}
-          </SummaryPill>
-          <SummaryPill icon={<Paperclip size={13} />}>附录 {appendices.length} 个</SummaryPill>
-          <SummaryPill icon={<CheckCircle2 size={13} />}>
+          </SummaryItem>
+          <SummaryItem icon={<Paperclip size={13} />}>附录 {appendices.length} 个</SummaryItem>
+          <SummaryItem icon={<CheckCircle2 size={13} />}>
             待处理评审 {openIssueCount} 条
-          </SummaryPill>
+          </SummaryItem>
           <ReadStatusSummary summaries={readSummaries} />
         </div>
       </header>
 
-      <section data-solution-asset-rail="primary" className="grid gap-4 xl:grid-cols-2">
-        <AssetPreviewCard
-          kind="md"
-          label="PRD"
-          description="Markdown 需求文档。"
-          icon={<FileText size={17} />}
-          document={prd}
-          versions={prdVersions}
-          selectedVersion={selectedPrdVersion}
-          upload={
-            canModify ? (
-              <SolutionAssetUploadDialog
-                solutionId={solution.id}
-                assetType="prd"
-                label="上传 PRD"
-                title="上传 PRD"
-                accept=".md,text/markdown"
-                helpText="仅支持 Markdown 文件；重复上传会成为新的 PRD 版本。"
-                defaultTitle="PRD"
-                className={uploadButtonClass()}
-              />
-            ) : null
-          }
-          primaryHref={prd ? `/docs/${prd.id}?mode=${canModify ? "edit" : "review"}` : undefined}
-          primaryLabel={canModify ? "编辑" : "评审"}
-          exportHref={
-            prd && selectedPrdVersion
-              ? `/api/documents/${prd.id}/versions/${selectedPrdVersion.id}/download`
-              : undefined
-          }
-          exportLabel="导出 PRD"
-          canModify={canModify}
-        />
+      <Tabs defaultValue="assets" className="mt-0">
+        <TabsList
+          data-solution-detail-tabs="true"
+          className="h-auto w-full justify-start gap-5 rounded-none border-b border-border bg-transparent p-0"
+        >
+          <TabsTrigger
+            value="assets"
+            className="rounded-none border-b-2 border-transparent px-0 py-2.5 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            资产
+          </TabsTrigger>
+          <TabsTrigger
+            value="reviews"
+            className="rounded-none border-b-2 border-transparent px-0 py-2.5 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            评审记录
+          </TabsTrigger>
+          <TabsTrigger
+            value="activity"
+            className="rounded-none border-b-2 border-transparent px-0 py-2.5 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+          >
+            活动
+          </TabsTrigger>
+        </TabsList>
 
-        <AssetPreviewCard
-          kind="html"
-          label="交互原型"
-          description="HTML 或 zip 原型包。"
-          icon={<FileCode2 size={17} />}
-          document={prototype}
-          versions={prototypeVersions}
-          selectedVersion={selectedPrototypeVersion}
-          upload={
-            canModify ? (
-              <SolutionAssetUploadDialog
-                solutionId={solution.id}
-                assetType="prototype"
-                label="上传原型"
-                title="上传交互原型"
-                accept=".html,.htm,.zip,text/html,application/zip"
-                helpText="支持单 HTML 或包含 index.html 的 zip 原型包。"
-                defaultTitle="交互原型"
-                className={uploadButtonClass()}
-              />
-            ) : null
-          }
-          primaryHref={
-            prototype
-              ? prototypeModeHref(prototype.id, "preview", selectedPrototypeVersion?.id)
-              : undefined
-          }
-          primaryLabel="预览"
-          exportHref={
-            prototype && selectedPrototypeVersion
-              ? `/api/documents/${prototype.id}/versions/${selectedPrototypeVersion.id}/download`
-              : undefined
-          }
-          exportLabel="导出 HTML"
-          canModify={canModify}
-        />
-      </section>
+        <TabsContent value="assets" className="mt-3 space-y-3">
+          <section data-solution-asset-rail="primary" className="grid gap-3 xl:grid-cols-2">
+            <AssetPreviewCard
+              kind="md"
+              label="PRD"
+              icon={<FileText size={16} />}
+              document={prd}
+              versions={prdVersions}
+              selectedVersion={selectedPrdVersion}
+              upload={
+                canModify ? (
+                  <SolutionAssetUploadDialog
+                    solutionId={solution.id}
+                    assetType="prd"
+                    label="上传 PRD"
+                    title="上传 PRD"
+                    accept=".md,text/markdown"
+                    helpText="仅支持 Markdown 文件；重复上传会成为新的 PRD 版本。"
+                    defaultTitle="PRD"
+                    className={uploadButtonClass()}
+                  />
+                ) : null
+              }
+              primaryHref={prd ? `/docs/${prd.id}?mode=${canModify ? "edit" : "review"}` : undefined}
+              primaryLabel={canModify ? "编辑" : "评审"}
+              exportHref={
+                prd && selectedPrdVersion
+                  ? `/api/documents/${prd.id}/versions/${selectedPrdVersion.id}/download`
+                  : undefined
+              }
+              exportLabel="导出 PRD"
+              canModify={canModify}
+            />
 
-      <AppendixSection
-        solutionId={solution.id}
-        appendices={appendices}
-        versionsByDocument={versionsByDocument}
-        canModify={canModify}
-      />
+            <AssetPreviewCard
+              kind="html"
+              label="交互原型"
+              icon={<FileCode2 size={16} />}
+              document={prototype}
+              versions={prototypeVersions}
+              selectedVersion={selectedPrototypeVersion}
+              upload={
+                canModify ? (
+                  <SolutionAssetUploadDialog
+                    solutionId={solution.id}
+                    assetType="prototype"
+                    label="上传原型"
+                    title="上传交互原型"
+                    accept=".html,.htm,.zip,text/html,application/zip"
+                    helpText="支持单 HTML 或包含 index.html 的 zip 原型包。"
+                    defaultTitle="交互原型"
+                    className={uploadButtonClass()}
+                  />
+                ) : null
+              }
+              primaryHref={
+                prototype
+                  ? prototypeModeHref(prototype.id, "preview", selectedPrototypeVersion?.id)
+                  : undefined
+              }
+              primaryLabel="预览"
+              exportHref={
+                prototype && selectedPrototypeVersion
+                  ? `/api/documents/${prototype.id}/versions/${selectedPrototypeVersion.id}/download`
+                  : undefined
+              }
+              exportLabel="导出 HTML"
+              canModify={canModify}
+            />
+          </section>
+
+          <AppendixSection
+            solutionId={solution.id}
+            appendices={appendices}
+            versionsByDocument={versionsByDocument}
+            canModify={canModify}
+          />
+        </TabsContent>
+
+        <TabsContent
+          value="reviews"
+          forceMount
+          className="mt-3 data-[state=inactive]:hidden"
+        >
+          <ReviewIssueLedger issues={reviewIssues} />
+        </TabsContent>
+
+        <TabsContent
+          value="activity"
+          forceMount
+          className="mt-3 data-[state=inactive]:hidden"
+        >
+          <ActivityFeed activities={activities} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
