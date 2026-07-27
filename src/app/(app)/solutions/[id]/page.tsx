@@ -2,6 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeHighlight from "rehype-highlight";
+import rehypeKatex from "rehype-katex";
 import {
   ArrowLeft,
   Download,
@@ -23,7 +28,6 @@ import {
   type ProjectReadSummary,
 } from "@/lib/project-reads";
 import { getSolutionReviewData } from "@/lib/solution-review";
-import ReviewLedgerSheet from "@/components/ReviewLedgerSheet";
 import ReviewIssueLedger from "@/components/ReviewIssueLedger";
 import AssetVersionSheet from "@/components/AssetVersionSheet";
 import SolutionAssetUploadDialog from "@/components/SolutionAssetUploadDialog";
@@ -356,7 +360,7 @@ function ReviewEntryButton({ href }: { href: string | null }) {
         className="inline-flex h-9 cursor-not-allowed items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground opacity-45"
       >
         <Eye size={14} />
-        进入评审
+        评审
       </span>
     );
   }
@@ -368,7 +372,7 @@ function ReviewEntryButton({ href }: { href: string | null }) {
       className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
     >
       <Eye size={14} />
-      进入评审
+      评审
     </Link>
   );
 }
@@ -377,16 +381,18 @@ function RenderedPreview({
   kind,
   preview,
   empty,
+  markdownContent,
   prototypePreviewSrc,
 }: {
   kind: PreviewKind;
   preview: AssetPreview;
   empty: boolean;
+  markdownContent?: string;
   prototypePreviewSrc?: string;
 }) {
   if (empty) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center border-y border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
+      <div className="flex min-h-0 flex-1 items-center justify-center border-y border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
           <UploadCloud className="h-4 w-4" />
           上传后显示最新页面切图
@@ -399,26 +405,32 @@ function RenderedPreview({
     return (
       <div
         data-solution-render-preview="html"
-        className="overflow-hidden border-y border-border bg-slate-950"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden border-y border-border bg-slate-950"
       >
-        <div className="flex h-7 items-center gap-1 border-b border-white/10 bg-slate-900 px-3">
+        <div className="flex h-7 shrink-0 items-center gap-1 border-b border-white/10 bg-slate-900 px-3">
           <span className="h-2 w-2 rounded-full bg-red-400" />
           <span className="h-2 w-2 rounded-full bg-amber-300" />
           <span className="h-2 w-2 rounded-full bg-emerald-400" />
           <span className="ml-2 h-2 flex-1 rounded-full bg-white/10" />
         </div>
         {prototypePreviewSrc ? (
-          <div className="h-[360px] overflow-hidden bg-white">
+          <div
+            data-solution-prototype-viewport="adaptive"
+            className="min-h-0 w-full flex-1 overflow-hidden bg-white"
+          >
             <iframe
               data-solution-prototype-frame="true"
               src={prototypePreviewSrc}
               title={`${preview.title} 预览`}
-              className="h-[720px] w-[200%] origin-top-left scale-50 border-0"
+              className="h-[200%] w-[200%] origin-top-left scale-50 border-0"
               sandbox="allow-scripts allow-forms allow-modals allow-popups"
             />
           </div>
         ) : (
-          <div className="min-h-[360px] bg-white p-5">
+          <div
+            data-solution-prototype-viewport="adaptive"
+            className="min-h-0 w-full flex-1 bg-white p-5"
+          >
             <div className="mb-3 h-7 w-28 rounded-full bg-sky-100" />
             <h3 className="line-clamp-2 text-xl font-semibold text-slate-950">{preview.title}</h3>
             <div className="mt-4 space-y-2">
@@ -441,19 +453,20 @@ function RenderedPreview({
   return (
     <div
       data-solution-render-preview="md"
-      className="min-h-[360px] border-y border-border bg-slate-100 p-3"
+      data-solution-markdown-scroll="true"
+      className="min-h-0 flex-1 overflow-y-auto border-y border-border bg-background px-5 py-4"
     >
-      <div className="mx-auto min-h-[336px] max-w-[96%] rounded-sm bg-white px-5 py-5 shadow-sm">
-        <div className="mb-3 h-2 w-16 rounded-full bg-slate-200" />
-        <h3 className="line-clamp-2 text-xl font-semibold text-slate-950">{preview.title}</h3>
-        <div className="mt-4 space-y-2">
-          {preview.lines.slice(0, 8).map((line) => (
-            <p key={line} className="text-sm leading-6 text-slate-600">
-              {line}
-            </p>
-          ))}
-        </div>
-      </div>
+      <article className="prose-prd mx-auto max-w-3xl text-sm text-foreground [&>:first-child]:mt-0">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[
+            rehypeKatex,
+            [rehypeHighlight, { detect: false, ignoreMissing: true }],
+          ]}
+        >
+          {markdownContent || `# ${preview.title}\n\n${preview.lines.join("\n\n")}`}
+        </ReactMarkdown>
+      </article>
     </div>
   );
 }
@@ -492,9 +505,12 @@ function AssetPreviewCard({
   return (
     <section
       data-solution-asset-card={kind}
-      className="overflow-hidden rounded-md border border-border bg-card"
+      className="flex h-[556px] flex-col overflow-hidden rounded-md border border-border bg-card"
     >
-      <div className="flex items-center justify-between gap-3 px-3 py-2">
+      <div
+        data-solution-asset-header={kind}
+        className="flex h-12 shrink-0 items-center justify-between gap-3 px-3"
+      >
         <div className="flex min-w-0 items-center gap-2">
           <div className="shrink-0 text-muted-foreground">
             {icon}
@@ -515,9 +531,13 @@ function AssetPreviewCard({
         kind={kind}
         preview={preview}
         empty={!document}
+        markdownContent={kind === "md" ? current?.content ?? undefined : undefined}
         prototypePreviewSrc={prototypePreviewSrc}
       />
-      <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 px-3 py-2">
+      <div
+        data-solution-asset-footer={kind}
+        className="flex h-12 shrink-0 flex-wrap items-center justify-between gap-3 px-3"
+      >
         <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>{current ? formatSize(current.size) : "暂无文件"}</span>
           {document && <span>更新于 {formatDate(document.updatedAt)}</span>}
@@ -763,7 +783,6 @@ export default async function SolutionDetailPage({
   const appendices = documents.filter((document) => document.type === "appendix");
   const reviewData = getSolutionReviewData(id);
   const reviewIssues = reviewData?.issues ?? [];
-  const openIssueCount = reviewIssues.filter((issue) => issue.status === "open").length;
   const prdVersions = prd ? versionsByDocument.get(prd.id) ?? [] : [];
   const prototypeVersions = prototype ? versionsByDocument.get(prototype.id) ?? [] : [];
   const selectedPrdVersion = getSelectedVersion(prd, prdVersions, query.prdVersion);
@@ -789,8 +808,8 @@ export default async function SolutionDetailPage({
 
   return (
     <div data-solution-detail-layout="workspace" className="p-5">
-      <header data-solution-detail-header="compact">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <header data-solution-detail-header="compact" className="pb-1">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div className="w-full min-w-0 md:w-auto md:flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <Link
@@ -807,31 +826,44 @@ export default async function SolutionDetailPage({
               <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
                 更新于 {formatDate(solution.updatedAt)}
               </span>
-              <ReadStatusSummary summaries={readSummaries} />
             </div>
             {solution.description && (
-              <p className="mt-1 line-clamp-1 max-w-3xl pl-10 text-sm text-muted-foreground">
+              <p className="mt-2 line-clamp-1 max-w-3xl pl-10 text-sm leading-5 text-muted-foreground">
                 {solution.description}
               </p>
             )}
           </div>
 
           <div className="flex w-full shrink-0 flex-wrap items-center justify-start gap-2 md:w-auto md:justify-end">
+            <ReadStatusSummary summaries={readSummaries} />
             <ReviewEntryButton href={reviewEntryHref} />
-            <ReviewLedgerSheet issues={reviewIssues} openCount={openIssueCount} compact />
-            <a
-              href={`/api/solutions/${solution.id}/review-context`}
-              aria-label="导出评审上下文"
-              title="导出评审上下文"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background hover:bg-muted"
-            >
-              <Download size={15} />
-            </a>
+            <span className="group relative inline-flex">
+              <a
+                href={`/api/solutions/${solution.id}/review-context`}
+                aria-label="下载评审上下文"
+                aria-describedby="review-context-download-tooltip"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Download size={15} />
+              </a>
+              <span
+                id="review-context-download-tooltip"
+                role="tooltip"
+                className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-64 rounded-md border border-border bg-popover px-3 py-2 text-left opacity-0 shadow-elev-2 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                <span className="block text-xs font-medium text-popover-foreground">
+                  下载评审上下文
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  包含当前 PRD、交互原型版本及评审记录。
+                </span>
+              </span>
+            </span>
           </div>
         </div>
       </header>
 
-      <Tabs defaultValue="assets" className="mt-1">
+      <Tabs defaultValue="assets" className="mt-2">
         <TabsList
           data-solution-detail-tabs="true"
           className="h-auto w-full justify-start gap-5 rounded-none border-b border-border bg-transparent p-0"

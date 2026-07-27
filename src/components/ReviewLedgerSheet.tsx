@@ -16,14 +16,9 @@ import type { SolutionReviewIssue } from "@/lib/solution-review/types";
 type ReviewLedgerSheetProps = {
   issues: SolutionReviewIssue[];
   openCount: number;
-  compact?: boolean;
 };
 
-export default function ReviewLedgerSheet({
-  issues,
-  openCount,
-  compact = false,
-}: ReviewLedgerSheetProps) {
+export default function ReviewLedgerSheet({ issues, openCount }: ReviewLedgerSheetProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -32,20 +27,15 @@ export default function ReviewLedgerSheet({
         type="button"
         data-review-issue-ledger="trigger"
         onClick={() => setOpen(true)}
-        className={
-          compact
-            ? "inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
-            : "inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:border-primary hover:bg-muted"
-        }
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:border-primary hover:bg-muted"
       >
         <ClipboardList className="size-4 text-muted-foreground" />
-        <span>{compact ? "评审台账" : "评审问题台账"}</span>
-        {!compact &&
-          (openCount > 0 ? (
-            <Badge variant="warning">{openCount} 待处理</Badge>
-          ) : (
-            <Badge variant="secondary">{issues.length}</Badge>
-          ))}
+        <span>评审问题台账</span>
+        {openCount > 0 ? (
+          <Badge variant="warning">{openCount} 待处理</Badge>
+        ) : (
+          <Badge variant="secondary">{issues.length}</Badge>
+        )}
       </button>
 
       {open && (

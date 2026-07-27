@@ -629,6 +629,17 @@ async function assertSolutionAssetStructure() {
           throw new Error(`Expected compact header to omit ${removedSummary}`);
         }
       }
+      if (emptyHtml.includes('data-review-issue-ledger="trigger"')) {
+        throw new Error("Expected compact header to omit the review ledger trigger");
+      }
+      for (const downloadCopy of [
+        "下载评审上下文",
+        "包含当前 PRD、交互原型版本及评审记录。",
+      ]) {
+        if (!emptyHtml.includes(downloadCopy)) {
+          throw new Error(`Expected review context tooltip to include ${downloadCopy}`);
+        }
+      }
 
       const prototypeOnly = await postSolutionAsset(cookie, {
         solutionId: projectId,
@@ -694,7 +705,10 @@ async function assertSolutionAssetStructure() {
         filename: "prd-v2.md",
         title: "需求 PRD",
         message: "PRD v2",
-        file: new Blob(["# PRD V2"], { type: "text/markdown" }),
+        file: new Blob(
+          ["# PRD V2\n\n- 支持列表\n\n| 字段 | 内容 |\n| --- | --- |\n| 状态 | 已渲染 |"],
+          { type: "text/markdown" }
+        ),
       });
       if (prdV2.response.status !== 201 || prdV2.body.document?.id !== prdV1.body.document.id) {
         throw new Error("Expected repeated PRD upload to create a new version on the same asset");
@@ -840,15 +854,26 @@ async function assertSolutionAssetStructure() {
       }
       for (const marker of [
         'data-solution-render-preview="md"',
+        'data-solution-markdown-scroll="true"',
         'data-solution-render-preview="html"',
+        'data-solution-prototype-viewport="adaptive"',
         'data-solution-prototype-frame="true"',
         'data-solution-asset-card="md"',
         'data-solution-asset-card="html"',
+        'data-solution-asset-header="md"',
+        'data-solution-asset-header="html"',
+        'data-solution-asset-footer="md"',
+        'data-solution-asset-footer="html"',
         'data-solution-asset-footer-actions="md"',
         'data-solution-asset-footer-actions="html"',
       ]) {
         if (!filledHtml.includes(marker)) {
           throw new Error(`Expected filled solution detail to include rendered preview marker ${marker}`);
+        }
+      }
+      for (const markdownElement of ["<ul>", "<table>", "<th>字段</th>"]) {
+        if (!filledHtml.includes(markdownElement)) {
+          throw new Error(`Expected PRD preview to render Markdown element ${markdownElement}`);
         }
       }
       if (
@@ -1059,7 +1084,7 @@ async function assertSolutionReviewWorkflow() {
         "评审问题台账",
         "data-review-issue-ledger",
         "待处理",
-        "导出评审上下文",
+        "下载评审上下文",
       ]) {
         if (!html.includes(marker)) {
           throw new Error(`Expected review workflow page to include ${marker}`);
