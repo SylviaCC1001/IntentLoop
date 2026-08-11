@@ -53,10 +53,10 @@ export default async function PermissionsPage() {
           </div>
           <h1 className="text-2xl font-semibold">成员角色</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            研发可查看、评论和参与评审，但不能修改需求方案资料。
+            研发可参与评审但不能修改方案；访客仅可查看。
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
           {userRoles.map((role) => (
             <div key={role} className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-xs text-muted-foreground">{roleLabels[role]}</div>

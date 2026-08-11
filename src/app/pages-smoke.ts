@@ -152,6 +152,7 @@ async function assertRolePermissionsAndReadTracking() {
       ["page-smoke-role-product", "product", "Role Product"],
       ["page-smoke-role-engineering", "engineering", "Role Engineering"],
       ["page-smoke-role-design", "design", "Role Design"],
+      ["page-smoke-role-visitor", "visitor", "Role Visitor"],
     ] as const;
     const sessions = Object.fromEntries(
       roles.map(([userId]) => [userId, `${userId}-session`])
@@ -238,6 +239,20 @@ async function assertRolePermissionsAndReadTracking() {
     try {
       const engineeringCookie = cookieFor("page-smoke-role-engineering");
       const productCookie = cookieFor("page-smoke-role-product");
+      const visitorCookie = cookieFor("page-smoke-role-visitor");
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/projects`, {
+          method: "POST",
+          headers: {
+            Cookie: visitorCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: "Visitor Created Project" }),
+        }),
+        403,
+        "visitor project create"
+      );
 
       await expectStatus(
         await fetch(`${baseUrl}/api/projects`, {
@@ -268,6 +283,32 @@ async function assertRolePermissionsAndReadTracking() {
         "engineering project patch"
       );
 
+      await expectStatus(
+        await fetch(`${baseUrl}/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: {
+            Cookie: engineeringCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "reviewed" }),
+        }),
+        403,
+        "engineering project status patch"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/projects/${projectId}`, {
+          method: "PATCH",
+          headers: {
+            Cookie: visitorCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: "reviewed" }),
+        }),
+        403,
+        "visitor project patch"
+      );
+
       const uploadData = new FormData();
       uploadData.set("assetType", "prd");
       uploadData.set("file", new Blob(["# Blocked"], { type: "text/markdown" }), "blocked.md");
@@ -280,6 +321,24 @@ async function assertRolePermissionsAndReadTracking() {
         }),
         403,
         "engineering solution asset upload"
+      );
+
+      const visitorUploadData = new FormData();
+      visitorUploadData.set("assetType", "prd");
+      visitorUploadData.set(
+        "file",
+        new Blob(["# Visitor blocked"], { type: "text/markdown" }),
+        "visitor-blocked.md"
+      );
+      visitorUploadData.set("title", "Visitor blocked PRD");
+      await expectStatus(
+        await fetch(`${baseUrl}/api/solutions/${projectId}/assets`, {
+          method: "POST",
+          headers: { Cookie: visitorCookie },
+          body: visitorUploadData,
+        }),
+        403,
+        "visitor solution asset upload"
       );
 
       await expectStatus(
@@ -296,6 +355,19 @@ async function assertRolePermissionsAndReadTracking() {
         }),
         403,
         "engineering version save"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/documents/${documentId}/versions`, {
+          method: "POST",
+          headers: {
+            Cookie: visitorCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ content: "# Visitor blocked edit" }),
+        }),
+        403,
+        "visitor version save"
       );
 
       await expectStatus(
@@ -316,16 +388,96 @@ async function assertRolePermissionsAndReadTracking() {
       );
 
       await expectStatus(
+        await fetch(`${baseUrl}/api/documents/${documentId}/comments`, {
+          method: "POST",
+          headers: {
+            Cookie: visitorCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            versionId,
+            anchor: { type: "doc" },
+            body: "访客不能评论",
+          }),
+        }),
+        403,
+        "visitor comment create"
+      );
+
+      const existingComment = db
+        .prepare("select id from comments where document_id = ? limit 1")
+        .get(documentId) as { id: string } | undefined;
+      if (!existingComment) {
+        throw new Error("Expected engineering comment for visitor permission checks");
+      }
+      await expectStatus(
+        await fetch(`${baseUrl}/api/comments/${existingComment.id}/resolve`, {
+          method: "POST",
+          headers: {
+            Cookie: visitorCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ resolved: true }),
+        }),
+        403,
+        "visitor comment resolve"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/documents/${documentId}/comments`, {
+          headers: { Cookie: visitorCookie },
+        }),
+        200,
+        "visitor comment read"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/documents/${documentId}/versions/${versionId}/download`, {
+          headers: { Cookie: visitorCookie },
+        }),
+        403,
+        "visitor document download"
+      );
+
+      await expectStatus(
+        await fetch(`${baseUrl}/api/solutions/${projectId}/review-context`, {
+          headers: { Cookie: visitorCookie },
+        }),
+        403,
+        "visitor review context download"
+      );
+
+      const productStatusResponse = await fetch(
+        `${baseUrl}/api/projects/${projectId}`,
+        {
+          method: "PATCH",
+          headers: {
+            Cookie: productCookie,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Role Permission Smoke Updated",
+            status: "reviewed",
+          }),
+        }
+      );
+      await expectStatus(productStatusResponse, 200, "product project status patch");
+      const productStatusBody = await productStatusResponse.json();
+      if (productStatusBody.project?.status !== "reviewed") {
+        throw new Error("Expected product role to update project status to reviewed");
+      }
+
+      await expectStatus(
         await fetch(`${baseUrl}/api/projects/${projectId}`, {
           method: "PATCH",
           headers: {
             Cookie: productCookie,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ name: "Role Permission Smoke Updated" }),
+          body: JSON.stringify({ status: "invalid-status" }),
         }),
-        200,
-        "product project patch"
+        400,
+        "invalid project status patch"
       );
 
       const pageResponse = await fetch(`${baseUrl}/solutions/${projectId}`, {
@@ -362,6 +514,54 @@ async function assertRolePermissionsAndReadTracking() {
         | undefined;
       if (!read || read.readCount < 1 || !read.lastReadAt) {
         throw new Error("Expected solution page view to record engineering read status");
+      }
+
+      const visitorProjectsResponse = await fetch(`${baseUrl}/projects`, {
+        headers: { Cookie: visitorCookie },
+      });
+      await expectStatus(visitorProjectsResponse, 200, "visitor projects page");
+      const visitorProjectsHtml = await visitorProjectsResponse.text();
+      for (const blockedMarker of ["新建需求方案", "data-project-status-control"] ) {
+        if (visitorProjectsHtml.includes(blockedMarker)) {
+          throw new Error(`Expected visitor projects page to omit ${blockedMarker}`);
+        }
+      }
+
+      const visitorSolutionResponse = await fetch(`${baseUrl}/solutions/${projectId}`, {
+        headers: { Cookie: visitorCookie },
+      });
+      await expectStatus(visitorSolutionResponse, 200, "visitor solution page");
+      const visitorSolutionHtml = await visitorSolutionResponse.text();
+      for (const blockedMarker of [
+        "上传 PRD",
+        "上传原型",
+        "上传附录",
+        'aria-label="下载评审上下文"',
+        "导出 PRD",
+        "导出 HTML",
+        "标记已处理",
+      ]) {
+        if (visitorSolutionHtml.includes(blockedMarker)) {
+          throw new Error(`Expected visitor solution page to omit ${blockedMarker}`);
+        }
+      }
+      if (!visitorSolutionHtml.includes(">查看<")) {
+        throw new Error("Expected visitor solution page to expose read-only PRD viewing");
+      }
+
+      const visitorDocumentResponse = await fetch(
+        `${baseUrl}/docs/${documentId}?mode=edit`,
+        { headers: { Cookie: visitorCookie } }
+      );
+      await expectStatus(visitorDocumentResponse, 200, "visitor document preview");
+      const visitorDocumentHtml = await visitorDocumentResponse.text();
+      if (!visitorDocumentHtml.includes('data-markdown-readonly-preview="true"')) {
+        throw new Error("Expected visitor document page to render a read-only preview");
+      }
+      for (const blockedMarker of ["Markdown 编辑", "添加注释", "发送"]) {
+        if (visitorDocumentHtml.includes(blockedMarker)) {
+          throw new Error(`Expected visitor document preview to omit ${blockedMarker}`);
+        }
       }
     } finally {
       const createdDocuments = db
@@ -509,6 +709,14 @@ async function assertProjectsCreateEntry() {
       if (!html.includes('data-project-card-density="compact"')) {
         throw new Error("Expected /projects to render compact project cards");
       }
+      if (!html.includes(`data-project-status-control="${projectId}"`)) {
+        throw new Error("Expected editable project card to render a status control");
+      }
+      for (const statusLabel of ["起草中", "已评审", "新修订"]) {
+        if (!html.includes(statusLabel)) {
+          throw new Error(`Expected project status control to include ${statusLabel}`);
+        }
+      }
       if (html.includes("个资产")) {
         throw new Error("Expected project cards to avoid redundant asset total copy");
       }
@@ -597,6 +805,9 @@ async function assertSolutionAssetStructure() {
         "PRD",
         "交互原型",
         "附录说明",
+        "资产",
+        "评审记录",
+        "活动",
         "上传 PRD",
         "上传原型",
         "上传附录",
@@ -607,9 +818,12 @@ async function assertSolutionAssetStructure() {
       }
       for (const marker of [
         'data-solution-detail-layout="workspace"',
+        'data-solution-detail-header="compact"',
         'data-solution-review-entry="header"',
+        'data-solution-detail-tabs="true"',
         'data-solution-asset-rail="primary"',
         'data-solution-appendix-list="compact"',
+        'data-solution-activity-feed="true"',
       ]) {
         if (!emptyHtml.includes(marker)) {
           throw new Error(`Expected solution detail workspace layout marker ${marker}`);
@@ -617,6 +831,22 @@ async function assertSolutionAssetStructure() {
       }
       if (emptyHtml.includes("项目")) {
         throw new Error("Expected solution detail to avoid project wording");
+      }
+      for (const removedSummary of ["附录 0 个", "待处理评审 0 条"]) {
+        if (emptyHtml.includes(removedSummary)) {
+          throw new Error(`Expected compact header to omit ${removedSummary}`);
+        }
+      }
+      if (emptyHtml.includes('data-review-issue-ledger="trigger"')) {
+        throw new Error("Expected compact header to omit the review ledger trigger");
+      }
+      for (const downloadCopy of [
+        "下载评审上下文",
+        "包含当前 PRD、交互原型版本及评审记录。",
+      ]) {
+        if (!emptyHtml.includes(downloadCopy)) {
+          throw new Error(`Expected review context tooltip to include ${downloadCopy}`);
+        }
       }
 
       const prototypeOnly = await postSolutionAsset(cookie, {
@@ -683,7 +913,10 @@ async function assertSolutionAssetStructure() {
         filename: "prd-v2.md",
         title: "需求 PRD",
         message: "PRD v2",
-        file: new Blob(["# PRD V2"], { type: "text/markdown" }),
+        file: new Blob(
+          ["# PRD V2\n\n- 支持列表\n\n| 字段 | 内容 |\n| --- | --- |\n| 状态 | 已渲染 |"],
+          { type: "text/markdown" }
+        ),
       });
       if (prdV2.response.status !== 201 || prdV2.body.document?.id !== prdV1.body.document.id) {
         throw new Error("Expected repeated PRD upload to create a new version on the same asset");
@@ -767,6 +1000,7 @@ async function assertSolutionAssetStructure() {
         "版本历史",
         "编辑",
         "预览",
+        "新增版本",
         "mode=joint",
         "mode=preview",
         `version=${protoV2Id}`,
@@ -828,15 +1062,26 @@ async function assertSolutionAssetStructure() {
       }
       for (const marker of [
         'data-solution-render-preview="md"',
+        'data-solution-markdown-scroll="true"',
         'data-solution-render-preview="html"',
+        'data-solution-prototype-viewport="adaptive"',
         'data-solution-prototype-frame="true"',
         'data-solution-asset-card="md"',
         'data-solution-asset-card="html"',
+        'data-solution-asset-header="md"',
+        'data-solution-asset-header="html"',
+        'data-solution-asset-footer="md"',
+        'data-solution-asset-footer="html"',
         'data-solution-asset-footer-actions="md"',
         'data-solution-asset-footer-actions="html"',
       ]) {
         if (!filledHtml.includes(marker)) {
           throw new Error(`Expected filled solution detail to include rendered preview marker ${marker}`);
+        }
+      }
+      for (const markdownElement of ["<ul>", "<table>", "<th>字段</th>"]) {
+        if (!filledHtml.includes(markdownElement)) {
+          throw new Error(`Expected PRD preview to render Markdown element ${markdownElement}`);
         }
       }
       if (
@@ -1047,7 +1292,7 @@ async function assertSolutionReviewWorkflow() {
         "评审问题台账",
         "data-review-issue-ledger",
         "待处理",
-        "导出评审上下文",
+        "下载评审上下文",
       ]) {
         if (!html.includes(marker)) {
           throw new Error(`Expected review workflow page to include ${marker}`);

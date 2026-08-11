@@ -5,6 +5,10 @@ import { genId } from "@/lib/utils";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 import type { CommentAnchor } from "@/lib/db/schema";
+import {
+  assertCanParticipateInReview,
+  forbiddenResponseMessage,
+} from "@/lib/auth/permissions";
 
 const anchorSchema: z.ZodType<CommentAnchor> = z.union([
   z.object({ type: z.literal("doc") }),
@@ -114,6 +118,7 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
+    assertCanParticipateInReview(user);
     const { id } = await params;
     const body = await req.json();
     const data = createSchema.parse(body);
@@ -140,6 +145,12 @@ export async function POST(
   } catch (e: unknown) {
     if (e instanceof Error && e.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+    if (e instanceof Error) {
+      const message = forbiddenResponseMessage(e);
+      if (message) {
+        return NextResponse.json({ error: message }, { status: 403 });
+      }
     }
     if (e instanceof z.ZodError) {
       return NextResponse.json(

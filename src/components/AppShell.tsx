@@ -47,13 +47,13 @@ export default function AppShell({
   ];
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background md:flex-row">
       {/* 侧栏 */}
       <aside
         data-app-sidebar-collapsible="true"
         data-app-sidebar-state={collapsed ? "collapsed" : "expanded"}
-        className={`flex shrink-0 flex-col border-r border-border bg-white/90 shadow-sm backdrop-blur transition-[width] duration-200 ${
-          collapsed ? "w-16" : "w-56"
+        className={`flex w-full shrink-0 flex-col border-b border-border bg-white/90 shadow-sm backdrop-blur transition-[width] duration-200 md:min-h-screen md:border-b-0 md:border-r ${
+          collapsed ? "md:w-16" : "md:w-56"
         }`}
       >
         <div className="border-b border-border p-3">
@@ -61,16 +61,16 @@ export default function AppShell({
             <Link
               href="/projects"
               className={`flex min-w-0 items-center gap-2 ${
-                collapsed ? "justify-center" : ""
+                collapsed ? "md:justify-center" : ""
               }`}
               title="IntentLoop"
             >
-              <ProductLogo showWordmark={!collapsed} />
+              <ProductLogo wordmarkClassName={collapsed ? "md:hidden" : undefined} />
             </Link>
             <button
               type="button"
               onClick={() => setCollapsed((value) => !value)}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex"
               aria-label={collapsed ? "展开导航" : "收起导航"}
               title={collapsed ? "展开导航" : "收起导航"}
             >
@@ -83,7 +83,7 @@ export default function AppShell({
           </div>
         </div>
 
-        <nav className="flex-1 p-2">
+        <nav className="flex flex-none gap-1 overflow-x-auto p-2 md:block md:flex-1">
           {navItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             const Icon = item.icon;
@@ -92,8 +92,8 @@ export default function AppShell({
                 key={item.href}
                 href={item.href}
                 title={item.label}
-                className={`mb-1 flex items-center rounded-md py-2 text-sm ${
-                  collapsed ? "justify-center px-2" : "gap-2 px-3"
+                className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm md:mb-1 md:flex-none ${
+                  collapsed ? "md:justify-center md:px-2" : "md:justify-start"
                 } ${
                   active
                     ? "bg-accent text-primary font-medium"
@@ -101,13 +101,15 @@ export default function AppShell({
                 }`}
               >
                 <Icon size={16} className="shrink-0" />
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                <span className={`truncate ${collapsed ? "md:hidden" : ""}`}>
+                  {item.label}
+                </span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-border p-3">
+        <div className="hidden border-t border-border p-3 md:block">
           <div
             className={`mb-2 flex items-center gap-2 ${
               collapsed ? "justify-center" : ""
@@ -120,14 +122,14 @@ export default function AppShell({
             >
               {user.displayName.slice(0, 1).toUpperCase()}
             </div>
-            {!collapsed && <div className="min-w-0 flex-1">
+            <div className={`min-w-0 flex-1 ${collapsed ? "md:hidden" : ""}`}>
               <div className="text-sm font-medium truncate">
                 {user.displayName}
               </div>
               <div className="text-xs text-muted-foreground truncate">
                 {roleLabel}
               </div>
-            </div>}
+            </div>
           </div>
           <button
             onClick={handleLogout}
@@ -137,13 +139,13 @@ export default function AppShell({
             title="登出"
           >
             <LogOut size={14} />
-            {!collapsed && "登出"}
+            <span className={collapsed ? "md:hidden" : ""}>登出</span>
           </button>
         </div>
       </aside>
 
       {/* 主内容 */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-auto">{children}</main>
     </div>
   );
 }

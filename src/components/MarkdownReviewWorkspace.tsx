@@ -16,6 +16,7 @@ type MarkdownReviewWorkspaceProps = {
   versionId: string | null;
   comments: ReviewComment[];
   lineAnchors: PreviewCommentAnchor[];
+  canComment: boolean;
 };
 
 export default function MarkdownReviewWorkspace({
@@ -24,6 +25,7 @@ export default function MarkdownReviewWorkspace({
   versionId,
   comments,
   lineAnchors,
+  canComment,
 }: MarkdownReviewWorkspaceProps) {
   const [selectedAnchor, setSelectedAnchor] =
     useState<CommentAnchor | null>(null);
@@ -42,6 +44,7 @@ export default function MarkdownReviewWorkspace({
   );
 
   function selectAnchor(anchor: CommentAnchor, commentId?: string) {
+    if (!canComment) return;
     setPanelOpen(true);
     if (commentId) {
       setActiveCommentId(commentId);
@@ -57,6 +60,23 @@ export default function MarkdownReviewWorkspace({
     setActiveCommentId(null);
     setSelectedAnchor(anchor);
     window.setTimeout(() => document.getElementById("comment-body")?.focus(), 0);
+  }
+
+  if (!canComment) {
+    return (
+      <section
+        data-markdown-readonly-preview="true"
+        className="min-w-0 rounded-lg border border-border bg-card"
+      >
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-medium">文档预览</h2>
+          <p className="text-xs text-muted-foreground">只读渲染视图</p>
+        </div>
+        <article className="mx-auto min-h-[680px] max-w-4xl bg-background px-8 py-8 md:px-12">
+          <MarkdownPreview content={content} />
+        </article>
+      </section>
+    );
   }
 
   return (
