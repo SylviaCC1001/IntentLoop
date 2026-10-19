@@ -7,7 +7,8 @@ import {
   assertCanDownloadAssets,
   forbiddenResponseMessage,
 } from "@/lib/auth/permissions";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 
 const contentTypes: Record<string, string> = {
   ".txt": "text/plain; charset=utf-8",
@@ -33,6 +34,7 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanDownloadAssets(user);
     const { id } = await params;
     const appendix = db
@@ -53,8 +55,8 @@ export async function GET(
       return NextResponse.json({ error: "文件不存在" }, { status: 404 });
     }
 
-    const dataDir = path.resolve(process.env.DATA_DIR || "./data");
-    const filePath = path.resolve(dataDir, ...version.storagePath.split("/"));
+    const rootDir = path.resolve(dataDir);
+    const filePath = path.resolve(rootDir, ...version.storagePath.split("/"));
     const relativePath = path.relative(dataDir, filePath);
     if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
       return NextResponse.json({ error: "非法路径" }, { status: 400 });

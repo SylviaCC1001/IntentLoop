@@ -8,7 +8,8 @@ process.env.DATA_DIR = smokeDataDir;
 async function main() {
   const { eq } = await import("drizzle-orm");
   await import("./migrate");
-  const { db, schema } = await import("./index");
+  const { getTenantDatabase, schema } = await import("./index");
+  const db = getTenantDatabase("cowork");
 
   db.insert(schema.users)
     .values({

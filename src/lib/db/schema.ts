@@ -243,6 +243,15 @@ export const sessions = sqliteTable("sessions", {
     .default(sql`(unixepoch() * 1000)`),
 });
 
+// Read-only prototype capabilities; never expose the application session ID to HTML.
+export const prototypeGrants = sqliteTable("prototype_grants", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+  documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  versionId: text("version_id").notNull().references(() => versions.id, { onDelete: "cascade" }),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 // ========== 类型导出 ==========
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;

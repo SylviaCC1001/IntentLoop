@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import {
   assertCanManageUsers,
   forbiddenResponseMessage,
@@ -19,6 +20,7 @@ export async function PATCH(
 ) {
   try {
     const actor = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanManageUsers(actor);
     const { id } = await params;
     const data = updateSchema.parse(await req.json());

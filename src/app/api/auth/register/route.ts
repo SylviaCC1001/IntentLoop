@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { getTenantDatabase, schema } from "@/lib/db";
+import { getTenant } from "@/lib/tenants";
 import { eq, count } from "drizzle-orm";
 import { createSession } from "@/lib/auth";
 import { genId, hashPassword, randomAvatarColor } from "@/lib/utils";
 import { z } from "zod";
 
 const registerSchema = z.object({
+  tenantId: z.enum(["cowork", "procurement"]),
   email: z.string().email(),
   displayName: z.string().min(1).max(32),
   password: z.string().min(6),
@@ -15,12 +17,15 @@ const registerSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, displayName, password, inviteCode } =
+    const { email, displayName, password, inviteCode, tenantId } =
       registerSchema.parse(body);
+    const db = getTenantDatabase(tenantId);
 
     // 校验邀请码
-    const expectedCode = process.env.INVITE_CODE || "PRD2026";
-    if (inviteCode !== expectedCode) {
+    const expectedCode = tenantId === "cowork"
+      ? process.env.COWORK_INVITE_CODE || process.env.INVITE_CODE
+      : process.env.PROCUREMENT_INVITE_CODE;
+    if (!expectedCode || inviteCode !== expectedCode) {
       return NextResponse.json({ error: "邀请码错误" }, { status: 403 });
     }
 
@@ -34,28 +39,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "邮箱已被注册" }, { status: 409 });
     }
 
-    // 第一个用户=管理者，后续默认产品角色
-    const userCountResult = db
-      .select({ c: count() })
-      .from(schema.users)
-      .get();
-    const isFirst = (userCountResult?.c ?? 0) === 0;
-
     const id = genId();
     const passwordHash = await hashPassword(password);
+    // Serialize first-admin assignment within this space.
+    const isFirst = db.transaction((tx) => {
+      const first = (tx.select({ c: count() }).from(schema.users).get()?.c ?? 0) === 0;
+      tx.insert(schema.users).values({
+        id,
+        email: email.toLowerCase(),
+        passwordHash,
+        displayName,
+        avatarColor: randomAvatarColor(),
+        role: first ? "admin" : "product",
+      }).run();
+      return first;
+    }, { behavior: "immediate" });
 
-    db.insert(schema.users).values({
-      id,
-      email: email.toLowerCase(),
-      passwordHash,
-      displayName,
-      avatarColor: randomAvatarColor(),
-      role: isFirst ? "admin" : "product",
-    }).run();
-
-    await createSession(id);
+    await createSession(id, tenantId);
 
     return NextResponse.json({
+      tenant: getTenant(tenantId),
       user: {
         id,
         email: email.toLowerCase(),

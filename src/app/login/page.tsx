@@ -4,8 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ProductLogo from "@/components/ProductLogo";
+import TenantSelect from "@/components/TenantSelect";
+import type { TenantId } from "@/lib/tenants";
 
 export default function LoginPage() {
+  const [tenantId, setTenantId] = useState<TenantId>("cowork");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,7 +23,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, tenantId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -49,6 +52,8 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 bg-card p-6 rounded-xl border border-border">
+          <TenantSelect value={tenantId} onChange={setTenantId} />
+          <p className="text-xs text-muted-foreground">原有账号和团队资料请选择 Cowork需求空间。</p>
           <div>
             <label className="block text-sm font-medium mb-1">邮箱</label>
             <input

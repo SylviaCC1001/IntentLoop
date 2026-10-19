@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
 import {
   assertCanModifySolutions,
@@ -19,6 +20,7 @@ const createSchema = z.object({
 export async function GET() {
   try {
     await requireAuth();
+    const { db } = await getRequestContext();
     const projects = db
       .select()
       .from(schema.projects)
@@ -37,6 +39,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanModifySolutions(user);
     const body = await req.json();
     const { name, description, color } = createSchema.parse(body);

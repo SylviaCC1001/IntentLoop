@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // GET /api/documents/:id/versions/:vid - 单版本详情
 export async function GET(
@@ -10,11 +11,12 @@ export async function GET(
 ) {
   try {
     await requireAuth();
-    const { vid } = await params;
+    const { db } = await getRequestContext();
+    const { id, vid } = await params;
     const version = db
       .select()
       .from(schema.versions)
-      .where(eq(schema.versions.id, vid))
+      .where(and(eq(schema.versions.id, vid), eq(schema.versions.documentId, id)))
       .get();
     if (!version) {
       return NextResponse.json({ error: "版本不存在" }, { status: 404 });

@@ -18,12 +18,15 @@ import {
   roleLabels,
 } from "@/lib/auth/permissions";
 import ProductLogo from "@/components/ProductLogo";
+import type { TenantId } from "@/lib/tenants";
 
 export default function AppShell({
   user,
+  tenant,
   children,
 }: {
   user: User;
+  tenant: { id: TenantId; name: string };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -47,7 +50,7 @@ export default function AppShell({
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-background md:flex-row">
+    <div data-tenant-id={tenant.id} className="flex min-h-screen flex-col bg-background md:flex-row">
       {/* 侧栏 */}
       <aside
         data-app-sidebar-collapsible="true"
@@ -80,6 +83,9 @@ export default function AppShell({
                 <PanelLeftClose size={16} />
               )}
             </button>
+          </div>
+          <div title={tenant.name} className={`mt-2 truncate text-xs text-muted-foreground ${collapsed ? "md:hidden" : ""}`}>
+            {tenant.name}
           </div>
         </div>
 
@@ -139,7 +145,7 @@ export default function AppShell({
             title="登出"
           >
             <LogOut size={14} />
-            <span className={collapsed ? "md:hidden" : ""}>登出</span>
+            <span className={collapsed ? "md:hidden" : ""}>登出 / 切换空间</span>
           </button>
         </div>
       </aside>

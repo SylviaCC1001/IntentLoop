@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { ArrowLeft, FileCode2, FileText } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePageAuth } from "@/lib/auth";
 import {
   canModifySolutions,
   canParticipateInReview,
 } from "@/lib/auth/permissions";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { recordProjectRead } from "@/lib/project-reads";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import MarkdownReviewWorkspace from "@/components/MarkdownReviewWorkspace";
@@ -136,7 +137,8 @@ export default async function DocumentDetailPage({
 }) {
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
-  const currentUser = await getCurrentUser();
+  const currentUser = await requirePageAuth();
+  const { db } = await getRequestContext();
   const canModify = currentUser ? canModifySolutions(currentUser) : false;
   const canReview = currentUser ? canParticipateInReview(currentUser) : false;
   const document = db
@@ -171,7 +173,7 @@ export default async function DocumentDetailPage({
     .where(eq(schema.projects.id, document.projectId))
     .get();
   if (currentUser && project) {
-    recordProjectRead(project.id, currentUser.id);
+    recordProjectRead(db, project.id, currentUser.id);
   }
   const projectDocuments = db
     .select()

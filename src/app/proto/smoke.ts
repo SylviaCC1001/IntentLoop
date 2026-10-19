@@ -23,10 +23,10 @@ fs.writeFileSync(
 process.env.DATA_DIR = smokeDataDir;
 
 async function main() {
-  const { GET } = await import("./[...path]/route");
+  const { servePrototype: GET } = await import("../../lib/prototypes/serve");
   const response = await GET(new Request("http://localhost/proto/doc/version/index.html"), {
     params: Promise.resolve({ path: ["doc", "version", "index.html"] }),
-  });
+  }, smokeDataDir);
 
   if (response.status !== 200) {
     throw new Error(`Expected 200 for prototype file, received ${response.status}`);
@@ -65,7 +65,7 @@ async function main() {
 
   const gbkResponse = await GET(new Request("http://localhost/proto/doc/version/gbk.html"), {
     params: Promise.resolve({ path: ["doc", "version", "gbk.html"] }),
-  });
+  }, smokeDataDir);
   const gbkBody = await gbkResponse.text();
   if (!gbkBody.includes("插件市场")) {
     throw new Error("Expected GBK prototype HTML to be decoded before injection");
@@ -76,7 +76,7 @@ async function main() {
 
   const blocked = await GET(new Request("http://localhost/proto/..%2F.env"), {
     params: Promise.resolve({ path: ["..", ".env"] }),
-  });
+  }, smokeDataDir);
   if (blocked.status !== 400) {
     throw new Error(`Expected traversal request to be blocked, received ${blocked.status}`);
   }

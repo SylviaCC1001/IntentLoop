@@ -1,7 +1,9 @@
+import { requirePageAuth } from "@/lib/auth";
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { FileCode2, FileText, FolderKanban } from "lucide-react";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import DocumentCreateDialog from "@/components/DocumentCreateDialog";
 import DocumentImportDialog from "@/components/DocumentImportDialog";
 
@@ -17,6 +19,8 @@ export default async function DocumentsPage({
 }: {
   searchParams: Promise<{ project?: string }>;
 }) {
+  await requirePageAuth();
+  const { db } = await getRequestContext();
   const { project } = await searchParams;
   const currentProject = project
     ? db.select().from(schema.projects).where(eq(schema.projects.id, project)).get()

@@ -6,18 +6,15 @@ import git from "isomorphic-git";
 import fs from "fs";
 import path from "path";
 
-const DATA_DIR = process.env.DATA_DIR || "./data";
-const REPOS_DIR = path.join(DATA_DIR, "repos");
-
-function getRepoDir(docId: string): string {
-  return path.join(REPOS_DIR, docId);
+function getRepoDir(dataDir: string, docId: string): string {
+  return path.join(dataDir, "repos", docId);
 }
 
 /**
  * 初始化文档对应的 git 仓库(每个文档一个非 bare repo)
  */
-export async function initRepo(docId: string): Promise<void> {
-  const dir = getRepoDir(docId);
+export async function initRepo(dataDir: string, docId: string): Promise<void> {
+  const dir = getRepoDir(dataDir, docId);
   if (fs.existsSync(path.join(dir, ".git"))) {
     return;
   }
@@ -33,13 +30,14 @@ export async function initRepo(docId: string): Promise<void> {
  * @param author 作者
  */
 export async function commit(
+  dataDir: string,
   docId: string,
   files: Record<string, string | Buffer>,
   message: string,
   author: { name: string; email: string }
 ): Promise<string> {
-  const dir = getRepoDir(docId);
-  await initRepo(docId);
+  const dir = getRepoDir(dataDir, docId);
+  await initRepo(dataDir, docId);
 
   // 写入文件
   for (const [relPath, content] of Object.entries(files)) {
@@ -63,11 +61,12 @@ export async function commit(
  * 读取某个 commit 中的文件
  */
 export async function readFileAt(
+  dataDir: string,
   docId: string,
   sha: string,
   filepath: string
 ): Promise<string | null> {
-  const dir = getRepoDir(docId);
+  const dir = getRepoDir(dataDir, docId);
   try {
     const { blob } = await git.readBlob({ fs, dir, oid: sha, filepath });
     return Buffer.from(blob).toString("utf-8");
@@ -79,8 +78,8 @@ export async function readFileAt(
 /**
  * 列出所有 commit
  */
-export async function log(docId: string, depth = 50) {
-  const dir = getRepoDir(docId);
+export async function log(dataDir: string, docId: string, depth = 50) {
+  const dir = getRepoDir(dataDir, docId);
   if (!fs.existsSync(path.join(dir, ".git"))) {
     return [];
   }

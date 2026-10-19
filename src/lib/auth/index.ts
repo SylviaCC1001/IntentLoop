@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
-import { db, schema } from "@/lib/db";
+import { getTenantDatabase, schema } from "@/lib/db";
+import { getTenant, TENANT_COOKIE, type TenantId } from "@/lib/tenants";
+import { redirect } from "next/navigation";
 import { eq, and, gt } from "drizzle-orm";
 import { genId } from "@/lib/utils";
 import type { User } from "@/lib/db/schema";
@@ -14,7 +16,8 @@ const COOKIE_SECURE =
 /**
  * 创建 session
  */
-export async function createSession(userId: string): Promise<string> {
+export async function createSession(userId: string, tenantId: TenantId): Promise<string> {
+  const db = getTenantDatabase(tenantId);
   const sessionId = genId();
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE);
 
@@ -32,6 +35,13 @@ export async function createSession(userId: string): Promise<string> {
     maxAge: SESSION_MAX_AGE / 1000,
     path: "/",
   });
+  cookieStore.set(TENANT_COOKIE, tenantId, {
+    httpOnly: true,
+    secure: COOKIE_SECURE,
+    sameSite: "lax",
+    maxAge: SESSION_MAX_AGE / 1000,
+    path: "/",
+  });
 
   return sessionId;
 }
@@ -42,7 +52,9 @@ export async function createSession(userId: string): Promise<string> {
 export async function getCurrentUser(): Promise<User | null> {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!sessionId) return null;
+  const tenant = getTenant(cookieStore.get(TENANT_COOKIE)?.value ?? "cowork");
+  if (!sessionId || !tenant) return null;
+  const db = getTenantDatabase(tenant.id);
 
   const now = new Date();
   const session = db
@@ -73,12 +85,15 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE)?.value;
-  if (sessionId) {
+  const tenant = getTenant(cookieStore.get(TENANT_COOKIE)?.value ?? "cowork");
+  if (sessionId && tenant) {
+    const db = getTenantDatabase(tenant.id);
     db.delete(schema.sessions)
       .where(eq(schema.sessions.id, sessionId))
       .run();
   }
   cookieStore.delete(SESSION_COOKIE);
+  cookieStore.delete(TENANT_COOKIE);
 }
 
 /**
@@ -89,5 +104,11 @@ export async function requireAuth(): Promise<User> {
   if (!user) {
     throw new Error("UNAUTHORIZED");
   }
+  return user;
+}
+
+export async function requirePageAuth(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   return user;
 }

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, schema } from "@/lib/db";
+import { schema, type TenantDatabase } from "@/lib/db";
 import type { Comment } from "@/lib/db/schema";
 
 type CommentActor = {
@@ -12,7 +12,7 @@ type CommentUpdate = {
   status?: "open" | "handled" | "closed" | "resolved";
 };
 
-function getCommentOrThrow(id: string): Comment {
+function getCommentOrThrow(db: TenantDatabase, id: string): Comment {
   const comment = db
     .select()
     .from(schema.comments)
@@ -35,11 +35,12 @@ function assertCanManageComment(comment: Comment, actor: CommentActor) {
 }
 
 export function updateComment(
+  db: TenantDatabase,
   id: string,
   actor: CommentActor,
   update: CommentUpdate
 ): Comment {
-  const comment = getCommentOrThrow(id);
+  const comment = getCommentOrThrow(db, id);
   assertCanManageComment(comment, actor);
 
   const changes: CommentUpdate = {};
@@ -57,22 +58,22 @@ export function updateComment(
       .run();
   }
 
-  return getCommentOrThrow(id);
+  return getCommentOrThrow(db, id);
 }
 
-export function resolveComment(id: string, resolved = true): Comment {
-  getCommentOrThrow(id);
+export function resolveComment(db: TenantDatabase, id: string, resolved = true): Comment {
+  getCommentOrThrow(db, id);
 
   db.update(schema.comments)
     .set({ status: resolved ? "resolved" : "open" })
     .where(eq(schema.comments.id, id))
     .run();
 
-  return getCommentOrThrow(id);
+  return getCommentOrThrow(db, id);
 }
 
-export function deleteComment(id: string, actor: CommentActor) {
-  const comment = getCommentOrThrow(id);
+export function deleteComment(db: TenantDatabase, id: string, actor: CommentActor) {
+  const comment = getCommentOrThrow(db, id);
   assertCanManageComment(comment, actor);
 
   db.delete(schema.comments)

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { compare } from "bcryptjs";
-import { db, schema } from "@/lib/db";
+import { getTenantDatabase, schema } from "@/lib/db";
+import { getTenant } from "@/lib/tenants";
 import { eq } from "drizzle-orm";
 import { createSession } from "@/lib/auth";
 import { z } from "zod";
 
 const loginSchema = z.object({
+  tenantId: z.enum(["cowork", "procurement"]),
   email: z.string().email(),
   password: z.string().min(1),
 });
@@ -13,7 +15,8 @@ const loginSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password } = loginSchema.parse(body);
+    const { email, password, tenantId } = loginSchema.parse(body);
+    const db = getTenantDatabase(tenantId);
 
     const user = db
       .select()
@@ -36,9 +39,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await createSession(user.id);
+    await createSession(user.id, tenantId);
 
     return NextResponse.json({
+      tenant: getTenant(tenantId),
       user: {
         id: user.id,
         email: user.email,

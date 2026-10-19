@@ -8,7 +8,8 @@ import {
   assertCanModifySolutions,
   forbiddenResponseMessage,
 } from "@/lib/auth/permissions";
-import { db, schema } from "@/lib/db";
+import { schema, type TenantDatabase } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { commit } from "@/lib/git";
 import { genId } from "@/lib/utils";
 
@@ -128,7 +129,7 @@ function safeAppendixName(filename: string) {
   return base;
 }
 
-function findCurrentAsset(solutionId: string, assetType: "prd" | "prototype") {
+function findCurrentAsset(db: TenantDatabase, solutionId: string, assetType: "prd" | "prototype") {
   const allowedTypes: Array<"md" | "html" | "html-zip" | "appendix"> =
     assetType === "prd" ? ["md"] : ["html", "html-zip"];
   return db
@@ -144,7 +145,7 @@ function findCurrentAsset(solutionId: string, assetType: "prd" | "prototype") {
     .get();
 }
 
-async function upsertVersionedAsset({
+async function upsertVersionedAsset(db: TenantDatabase, dataDir: string, {
   solutionId,
   file,
   buffer,
@@ -176,10 +177,9 @@ async function upsertVersionedAsset({
     return { error: "交互原型仅支持 .html / .zip 文件" };
   }
 
-  const existing = findCurrentAsset(solutionId, assetType);
+  const existing = findCurrentAsset(db, solutionId, assetType);
   const documentId = existing?.id ?? genId();
   const versionId = genId();
-  const dataDir = process.env.DATA_DIR || "./data";
   const targetDir = path.join(dataDir, "prototypes", documentId, versionId);
   let type: "md" | "html" | "html-zip";
   let content: string | null = null;
@@ -190,6 +190,7 @@ async function upsertVersionedAsset({
     type = "md";
     content = buffer.toString("utf-8");
     commitSha = await commit(
+      dataDir,
       documentId,
       { "content.md": content },
       message,
@@ -202,6 +203,7 @@ async function upsertVersionedAsset({
     fs.writeFileSync(path.join(targetDir, "index.html"), buffer);
     storagePath = path.posix.join(documentId, versionId, "index.html");
     commitSha = await commit(
+      dataDir,
       documentId,
       { "index.html": content },
       message,
@@ -271,7 +273,7 @@ async function upsertVersionedAsset({
   return { document, versionId };
 }
 
-function createAppendix({
+function createAppendix(db: TenantDatabase, dataDir: string, {
   solutionId,
   file,
   buffer,
@@ -289,7 +291,6 @@ function createAppendix({
   const documentId = genId();
   const versionId = genId();
   const filename = safeAppendixName(file.name);
-  const dataDir = process.env.DATA_DIR || "./data";
   const targetDir = path.join(dataDir, "appendices", solutionId, documentId);
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(path.join(targetDir, filename), buffer);
@@ -336,6 +337,7 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanModifySolutions(user);
     const { id } = await params;
     const solution = db
@@ -367,7 +369,7 @@ export async function POST(
 
     const result =
       assetType === "appendix"
-        ? createAppendix({
+        ? createAppendix(db, dataDir, {
             solutionId: id,
             file,
             buffer,
@@ -375,7 +377,7 @@ export async function POST(
             message,
             userId: user.id,
           })
-        : await upsertVersionedAsset({
+        : await upsertVersionedAsset(db, dataDir, {
             solutionId: id,
             file,
             buffer,

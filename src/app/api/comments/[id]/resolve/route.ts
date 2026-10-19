@@ -1,3 +1,4 @@
+import { getRequestContext } from "@/lib/tenants/server";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
@@ -41,10 +42,11 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanParticipateInReview(user);
     const { id } = await params;
     const data = resolveSchema.parse(await req.json().catch(() => ({})));
-    const comment = resolveComment(id, data.resolved ?? true);
+    const comment = resolveComment(db, id, data.resolved ?? true);
 
     return NextResponse.json({ comment });
   } catch (error) {

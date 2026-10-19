@@ -8,7 +8,8 @@ process.env.DATA_DIR = smokeDataDir;
 async function main() {
   const { eq } = await import("drizzle-orm");
   await import("../db/migrate");
-  const { db, schema } = await import("../db");
+  const { getTenantDatabase, schema } = await import("../db");
+  const db = getTenantDatabase("cowork");
   const {
     deleteComment,
     resolveComment,
@@ -83,7 +84,7 @@ async function main() {
     })
     .run();
 
-  const updated = updateComment("comment", { id: "owner", role: "product" }, {
+  const updated = updateComment(db, "comment", { id: "owner", role: "product" }, {
     body: "Updated",
   });
   if (updated.body !== "Updated") {
@@ -92,7 +93,7 @@ async function main() {
 
   let forbidden = false;
   try {
-    updateComment("comment", { id: "reviewer", role: "product" }, {
+    updateComment(db, "comment", { id: "reviewer", role: "product" }, {
       body: "Nope",
     });
   } catch (error) {
@@ -102,12 +103,12 @@ async function main() {
     throw new Error("Expected non-owner product update to be forbidden");
   }
 
-  const resolved = resolveComment("comment", true);
+  const resolved = resolveComment(db, "comment", true);
   if (resolved.status !== "resolved") {
     throw new Error("Expected comment to resolve");
   }
 
-  deleteComment("comment", { id: "owner", role: "product" });
+  deleteComment(db, "comment", { id: "owner", role: "product" });
   const deleted = db
     .select()
     .from(schema.comments)

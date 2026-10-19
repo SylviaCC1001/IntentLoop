@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
         source: "/proto/:path*",
         headers: [
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "Content-Security-Policy", value: "sandbox allow-scripts allow-forms allow-modals allow-popups; frame-ancestors 'self'" },
         ],
       },
     ];

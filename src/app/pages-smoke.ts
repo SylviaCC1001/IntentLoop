@@ -1803,7 +1803,7 @@ async function assertHtmlVersionSaveWritesPrototypeFile() {
       if (!fs.existsSync(savedFile)) {
         throw new Error("Expected HTML version save API to write prototype index.html");
       }
-      const protoResponse = await fetch(`${baseUrl}/proto/${saved.storage_path}`);
+      const protoResponse = await fetch(`${baseUrl}/proto/${saved.storage_path}`, { headers: { Cookie: cookie } });
       if (protoResponse.status !== 200) {
         throw new Error(`Expected saved HTML prototype to be served, got ${protoResponse.status}`);
       }
@@ -2215,7 +2215,7 @@ async function assertDocumentImport() {
       if (!zipVersion.storage_path.endsWith("index.html")) {
         throw new Error("Expected imported .zip storage_path to point at index.html");
       }
-      const protoResponse = await fetch(`${baseUrl}/proto/${zipVersion.storage_path}`);
+      const protoResponse = await fetch(`${baseUrl}/proto/${zipVersion.storage_path}`, { headers: { Cookie: cookie } });
       if (protoResponse.status !== 200) {
         throw new Error(`Expected imported .zip prototype to be served, got ${protoResponse.status}`);
       }

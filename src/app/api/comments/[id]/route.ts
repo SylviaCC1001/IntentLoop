@@ -1,3 +1,4 @@
+import { getRequestContext } from "@/lib/tenants/server";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
@@ -45,10 +46,11 @@ export async function PATCH(
 ) {
   try {
     const user = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanParticipateInReview(user);
     const { id } = await params;
     const data = updateSchema.parse(await req.json());
-    const comment = updateComment(id, user, data);
+    const comment = updateComment(db, id, user, data);
 
     return NextResponse.json({ comment });
   } catch (error) {
@@ -62,9 +64,10 @@ export async function DELETE(
 ) {
   try {
     const user = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanParticipateInReview(user);
     const { id } = await params;
-    deleteComment(id, user);
+    deleteComment(db, id, user);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

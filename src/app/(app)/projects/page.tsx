@@ -10,8 +10,9 @@ import {
   FolderPlus,
   Paperclip,
 } from "lucide-react";
-import { db, schema } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
+import { requirePageAuth } from "@/lib/auth";
 import { canModifySolutions } from "@/lib/auth/permissions";
 import { getProjectReadCounts } from "@/lib/project-reads";
 import { Badge } from "@/components/ui/badge";
@@ -347,7 +348,8 @@ function ProjectAssetStack({
 }
 
 export default async function ProjectsPage() {
-  const user = await getCurrentUser();
+  const user = await requirePageAuth();
+  const { db } = await getRequestContext();
   const canModify = user ? canModifySolutions(user) : false;
   const projects = db
     .select()
@@ -362,7 +364,7 @@ export default async function ProjectsPage() {
     .all();
   const versions = db.select().from(schema.versions).all();
   const currentVersionsByDocument = new Map<string, ProjectVersion>();
-  const readCountsByProject = getProjectReadCounts();
+  const readCountsByProject = getProjectReadCounts(db);
   for (const document of documents) {
     if (!document.currentVersionId) continue;
     const currentVersion = versions.find((version) => version.id === document.currentVersionId);

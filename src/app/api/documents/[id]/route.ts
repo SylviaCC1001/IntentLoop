@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
 import {
   assertCanModifySolutions,
@@ -26,6 +27,7 @@ export async function GET(
 ) {
   try {
     await requireAuth();
+    const { db } = await getRequestContext();
     const { id } = await params;
     const doc = db
       .select()
@@ -59,19 +61,20 @@ export async function PATCH(
 ) {
   try {
     const user = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanModifySolutions(user);
     const { id } = await params;
     const body = await req.json();
     const data = updateSchema.parse(body);
+    const before = db.select().from(schema.documents)
+      .where(eq(schema.documents.id, id)).get();
+    if (!before) {
+      return NextResponse.json({ error: "文档不存在" }, { status: 404 });
+    }
 
     // 状态变更要记日志
     if (data.status) {
-      const before = db
-        .select()
-        .from(schema.documents)
-        .where(eq(schema.documents.id, id))
-        .get();
-      if (before && before.status !== data.status) {
+      if (before.status !== data.status) {
         db.insert(schema.statusLogs).values({
           id: genId(),
           documentId: id,
@@ -111,15 +114,21 @@ export async function DELETE(
 ) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanModifySolutions(user);
     const { id } = await params;
+    const document = db.select().from(schema.documents)
+      .where(eq(schema.documents.id, id)).get();
+    if (!document) {
+      return NextResponse.json({ error: "文档不存在" }, { status: 404 });
+    }
 
     // 删除文件系统中的原型目录
-    const protoDir = path.join(process.env.DATA_DIR || "./data", "prototypes", id);
+    const protoDir = path.join(dataDir, "prototypes", id);
     if (fs.existsSync(protoDir)) {
       fs.rmSync(protoDir, { recursive: true, force: true });
     }
-    const repoDir = path.join(process.env.DATA_DIR || "./data", "repos", id);
+    const repoDir = path.join(dataDir, "repos", id);
     if (fs.existsSync(repoDir)) {
       fs.rmSync(repoDir, { recursive: true, force: true });
     }

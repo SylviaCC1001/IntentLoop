@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { diffLines } from "diff";
@@ -11,6 +12,7 @@ export async function GET(
 ) {
   try {
     await requireAuth();
+    const { db } = await getRequestContext();
     await params; // id 暂未直接用,通过 from/to 查
     const { searchParams } = new URL(req.url);
     const from = searchParams.get("from");

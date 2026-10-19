@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
 import {
   assertCanModifySolutions,
@@ -24,6 +25,7 @@ export async function GET(
 ) {
   try {
     await requireAuth();
+    const { db } = await getRequestContext();
     const { id } = await params;
     const versions = db
       .select()
@@ -47,6 +49,7 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanModifySolutions(user);
     const { id } = await params;
     const body = await req.json();
@@ -70,6 +73,7 @@ export async function POST(
     const versionId = genId();
     const filename = doc.type === "md" ? "content.md" : "index.html";
     const sha = await commit(
+      dataDir,
       id,
       { [filename]: content },
       message || `保存于 ${new Date().toLocaleString("zh-CN")}`,
@@ -78,7 +82,6 @@ export async function POST(
 
     let storagePath: string | null = null;
     if (doc.type === "html") {
-      const dataDir = process.env.DATA_DIR || "./data";
       const targetDir = path.join(dataDir, "prototypes", id, versionId);
       fs.mkdirSync(targetDir, { recursive: true });
       fs.writeFileSync(path.join(targetDir, "index.html"), content, "utf-8");

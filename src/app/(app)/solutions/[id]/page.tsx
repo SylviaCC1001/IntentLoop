@@ -19,13 +19,14 @@ import {
   UploadCloud,
   UsersRound,
 } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePageAuth } from "@/lib/auth";
 import {
   canDownloadAssets,
   canModifySolutions,
   canParticipateInReview,
 } from "@/lib/auth/permissions";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import {
   getProjectReadSummaries,
   recordProjectRead,
@@ -754,7 +755,8 @@ export default async function SolutionDetailPage({
 }) {
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
-  const currentUser = await getCurrentUser();
+  const currentUser = await requirePageAuth();
+  const { db } = await getRequestContext();
   const solution = db
     .select()
     .from(schema.projects)
@@ -766,13 +768,13 @@ export default async function SolutionDetailPage({
   }
 
   if (currentUser) {
-    recordProjectRead(solution.id, currentUser.id);
+    recordProjectRead(db, solution.id, currentUser.id);
   }
 
   const canModify = currentUser ? canModifySolutions(currentUser) : false;
   const canReview = currentUser ? canParticipateInReview(currentUser) : false;
   const canDownload = currentUser ? canDownloadAssets(currentUser) : false;
-  const readSummaries = getProjectReadSummaries(solution.id);
+  const readSummaries = getProjectReadSummaries(db, solution.id);
   const documents = db
     .select()
     .from(schema.documents)
@@ -798,7 +800,7 @@ export default async function SolutionDetailPage({
     documents.find((document) => document.type === "html" || document.type === "html-zip") ??
     null;
   const appendices = documents.filter((document) => document.type === "appendix");
-  const reviewData = getSolutionReviewData(id);
+  const reviewData = getSolutionReviewData(db, id);
   const reviewIssues = reviewData?.issues ?? [];
   const prdVersions = prd ? versionsByDocument.get(prd.id) ?? [] : [];
   const prototypeVersions = prototype ? versionsByDocument.get(prototype.id) ?? [] : [];

@@ -4,8 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ProductLogo from "@/components/ProductLogo";
+import TenantSelect from "@/components/TenantSelect";
+import type { TenantId } from "@/lib/tenants";
 
 export default function RegisterPage() {
+  const [tenantId, setTenantId] = useState<TenantId>("cowork");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -22,7 +25,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, displayName, password, inviteCode }),
+        body: JSON.stringify({ email, displayName, password, inviteCode, tenantId }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -51,6 +54,8 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 bg-card p-6 rounded-xl border border-border">
+          <TenantSelect value={tenantId} onChange={setTenantId} />
+          <p className="text-xs text-muted-foreground">账号仅在所选空间内生效，请使用该空间管理员提供的邀请码。</p>
           <div>
             <label className="block text-sm font-medium mb-1">显示名</label>
             <input
@@ -94,7 +99,7 @@ export default function RegisterPage() {
               onChange={(e) => setInviteCode(e.target.value)}
               required
               className="w-full px-3 py-2 rounded-md border border-border bg-background focus:ring-2 focus:ring-primary outline-none"
-              placeholder=".env 中配置的 INVITE_CODE"
+              placeholder="请输入所选空间的邀请码"
             />
           </div>
           {error && (

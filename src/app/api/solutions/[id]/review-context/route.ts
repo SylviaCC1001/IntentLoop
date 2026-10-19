@@ -1,3 +1,4 @@
+import { getRequestContext } from "@/lib/tenants/server";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -15,9 +16,10 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanDownloadAssets(user);
     const { id } = await params;
-    const data = getSolutionReviewData(id);
+    const data = getSolutionReviewData(db, id);
     if (!data) {
       return NextResponse.json({ error: "需求方案不存在" }, { status: 404 });
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
 import { genId } from "@/lib/utils";
 import { eq, and, desc } from "drizzle-orm";
@@ -74,6 +75,7 @@ export async function GET(
 ) {
   try {
     await requireAuth();
+    const { db } = await getRequestContext();
     const { id } = await params;
     const { searchParams } = new URL(req.url);
     const versionId = searchParams.get("version");
@@ -118,10 +120,24 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
+    const { db } = await getRequestContext();
     assertCanParticipateInReview(user);
     const { id } = await params;
     const body = await req.json();
     const data = createSchema.parse(body);
+
+    const document = db.select().from(schema.documents)
+      .where(eq(schema.documents.id, id)).get();
+    const version = db.select().from(schema.versions)
+      .where(and(eq(schema.versions.id, data.versionId), eq(schema.versions.documentId, id))).get();
+    if (!document || !version) {
+      return NextResponse.json({ error: "文档或版本不存在" }, { status: 404 });
+    }
+    if (data.parentId) {
+      const parent = db.select().from(schema.comments)
+        .where(and(eq(schema.comments.id, data.parentId), eq(schema.comments.documentId, id))).get();
+      if (!parent) return NextResponse.json({ error: "评论不存在" }, { status: 404 });
+    }
 
     const commentId = genId();
     db.insert(schema.comments).values({

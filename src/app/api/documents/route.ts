@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
 import {
   assertCanModifySolutions,
@@ -24,6 +25,7 @@ const createSchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     await requireAuth();
+    const { db } = await getRequestContext();
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("project");
     const status = searchParams.get("status");
@@ -58,9 +60,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanModifySolutions(user);
     const body = await req.json();
     const data = createSchema.parse(body);
+
+    const project = db.select().from(schema.projects)
+      .where(eq(schema.projects.id, data.projectId)).get();
+    if (!project) {
+      return NextResponse.json({ error: "项目不存在" }, { status: 404 });
+    }
 
     const docId = genId();
     const versionId = genId();
@@ -81,6 +90,7 @@ export async function POST(req: NextRequest) {
     // 创建初始版本
     const filename = data.type === "md" ? "content.md" : "index.html";
     const sha = await commit(
+      dataDir,
       docId,
       { [filename]: data.content },
       "Initial commit",

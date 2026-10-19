@@ -8,7 +8,8 @@ import {
   assertCanModifySolutions,
   forbiddenResponseMessage,
 } from "@/lib/auth/permissions";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { commit } from "@/lib/git";
 import { genId } from "@/lib/utils";
 
@@ -129,6 +130,7 @@ function findIndexFile(root: string) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanModifySolutions(user);
     const maxSize = Number(process.env.MAX_UPLOAD_SIZE_MB || 50) * 1024 * 1024;
     let formData: FormData;
@@ -175,7 +177,6 @@ export async function POST(req: NextRequest) {
     const priority = parsePriority(formData.get("priority"));
     const docId = genId();
     const versionId = genId();
-    const dataDir = process.env.DATA_DIR || "./data";
     const targetDir = path.join(dataDir, "prototypes", docId, versionId);
 
     let type: "md" | "html" | "html-zip";
@@ -187,6 +188,7 @@ export async function POST(req: NextRequest) {
       type = "md";
       content = buffer.toString("utf-8");
       commitSha = await commit(
+      dataDir,
         docId,
         { "content.md": content },
         `导入 ${filename}`,
@@ -199,6 +201,7 @@ export async function POST(req: NextRequest) {
       fs.writeFileSync(path.join(targetDir, "index.html"), buffer);
       storagePath = path.posix.join(docId, versionId, "index.html");
       commitSha = await commit(
+      dataDir,
         docId,
         { "index.html": content },
         `导入 ${filename}`,

@@ -1,5 +1,5 @@
 import { desc, eq, sql } from "drizzle-orm";
-import { db, schema } from "@/lib/db";
+import { schema, type TenantDatabase } from "@/lib/db";
 import { genId } from "@/lib/utils";
 import { normalizeUserRole, roleLabels } from "@/lib/auth/permissions";
 
@@ -15,7 +15,7 @@ export type ProjectReadSummary = {
   lastReadAt: Date | null;
 };
 
-export function recordProjectRead(projectId: string, userId: string) {
+export function recordProjectRead(db: TenantDatabase, projectId: string, userId: string) {
   const now = new Date();
 
   db.insert(schema.projectReads)
@@ -37,7 +37,7 @@ export function recordProjectRead(projectId: string, userId: string) {
     .run();
 }
 
-export function getProjectReadSummaries(projectId: string): ProjectReadSummary[] {
+export function getProjectReadSummaries(db: TenantDatabase, projectId: string): ProjectReadSummary[] {
   const users = db.select().from(schema.users).orderBy(desc(schema.users.createdAt)).all();
   const reads = db
     .select()
@@ -71,7 +71,7 @@ export function getProjectReadSummaries(projectId: string): ProjectReadSummary[]
     });
 }
 
-export function getProjectReadCounts() {
+export function getProjectReadCounts(db: TenantDatabase) {
   const reads = db.select().from(schema.projectReads).all();
   const counts = new Map<string, number>();
   for (const read of reads) {

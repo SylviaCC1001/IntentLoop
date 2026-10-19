@@ -7,7 +7,8 @@ import {
   assertCanDownloadAssets,
   forbiddenResponseMessage,
 } from "@/lib/auth/permissions";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 
 const textContentTypes: Record<string, string> = {
   md: "text/markdown; charset=utf-8",
@@ -33,9 +34,9 @@ function contentDisposition(filename: string) {
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-function readStoredPrototype(storagePath: string) {
-  const dataDir = path.resolve(process.env.DATA_DIR || "./data");
-  const prototypesDir = path.resolve(dataDir, "prototypes");
+function readStoredPrototype(dataDir: string, storagePath: string) {
+  const rootDir = path.resolve(dataDir);
+  const prototypesDir = path.resolve(rootDir, "prototypes");
   const filePath = path.resolve(prototypesDir, ...storagePath.split("/"));
   const relativePath = path.relative(prototypesDir, filePath);
   if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
@@ -53,6 +54,7 @@ export async function GET(
 ) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanDownloadAssets(user);
     const { id, vid } = await params;
     const document = db
@@ -77,7 +79,7 @@ export async function GET(
       version.content !== null
         ? Buffer.from(version.content, "utf-8")
         : version.storagePath
-          ? readStoredPrototype(version.storagePath)
+          ? readStoredPrototype(dataDir, version.storagePath)
           : null;
     if (!body) {
       return NextResponse.json({ error: "文件不存在" }, { status: 404 });

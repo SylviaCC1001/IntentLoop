@@ -1,5 +1,5 @@
 import { desc, eq, inArray } from "drizzle-orm";
-import { db, schema } from "@/lib/db";
+import { schema, type TenantDatabase } from "@/lib/db";
 import type { CommentAnchor } from "@/lib/db/schema";
 import {
   reviewStatusLabels,
@@ -47,7 +47,7 @@ function anchorLabel(anchor: CommentAnchor) {
   return anchor.preview || anchor.selector || "页面元素";
 }
 
-export function getSolutionReviewData(solutionId: string): SolutionReviewData | null {
+export function getSolutionReviewData(db: TenantDatabase, solutionId: string): SolutionReviewData | null {
   const solution = db
     .select()
     .from(schema.projects)

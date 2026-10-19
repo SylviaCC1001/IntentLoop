@@ -1,6 +1,8 @@
+import { requirePageAuth } from "@/lib/auth";
 import Link from "next/link";
 import { desc } from "drizzle-orm";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { reviewStatusLabels, type ReviewIssueStatus } from "@/lib/solution-review/types";
 
 const columns = [
@@ -10,6 +12,8 @@ const columns = [
 ] as const;
 
 export default async function BoardPage() {
+  await requirePageAuth();
+  const { db } = await getRequestContext();
   const comments = db
     .select()
     .from(schema.comments)

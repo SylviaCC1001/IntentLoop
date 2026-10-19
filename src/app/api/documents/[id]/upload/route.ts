@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import { requireAuth } from "@/lib/auth";
 import {
   assertCanModifySolutions,
@@ -19,6 +20,7 @@ export async function POST(
 ) {
   try {
     const user = await requireAuth();
+    const { db, dataDir } = await getRequestContext();
     assertCanModifySolutions(user);
     const { id } = await params;
 
@@ -41,7 +43,6 @@ export async function POST(
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const versionId = genId();
-    const dataDir = process.env.DATA_DIR || "./data";
     const targetDir = path.join(
       dataDir,
       "prototypes",

@@ -9,7 +9,8 @@ async function main() {
   const { eq } = await import("drizzle-orm");
   const { genId } = await import("../utils");
   await import("../db/migrate");
-  const { db, schema } = await import("../db");
+  const { getTenantDatabase, schema } = await import("../db");
+  const db = getTenantDatabase("cowork");
   const {
     canManageUsers,
     canDownloadAssets,
@@ -97,12 +98,12 @@ async function main() {
     })
     .run();
 
-  recordProjectRead(projectId, "engineering-user");
-  recordProjectRead(projectId, "engineering-user");
-  recordProjectRead(projectId, "design-user");
-  recordProjectRead(projectId, "visitor-user");
+  recordProjectRead(db, projectId, "engineering-user");
+  recordProjectRead(db, projectId, "engineering-user");
+  recordProjectRead(db, projectId, "design-user");
+  recordProjectRead(db, projectId, "visitor-user");
 
-  const summaries = getProjectReadSummaries(projectId);
+  const summaries = getProjectReadSummaries(db, projectId);
   const engineering = summaries.find((item) => item.userId === "engineering-user");
   const product = summaries.find((item) => item.userId === "product-user");
   const visitor = summaries.find((item) => item.userId === "visitor-user");

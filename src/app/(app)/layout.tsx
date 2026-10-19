@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import AppShell from "@/components/AppShell";
+import { getRequestContext } from "@/lib/tenants/server";
 
 export default async function AppLayout({
   children,
@@ -11,8 +12,9 @@ export default async function AppLayout({
   if (!user) {
     redirect("/login");
   }
+  const { tenant } = await getRequestContext();
   return (
-    <AppShell user={user}>
+    <AppShell user={user} tenant={tenant}>
       {children}
     </AppShell>
   );

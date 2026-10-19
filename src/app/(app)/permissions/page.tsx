@@ -1,14 +1,15 @@
 import { redirect } from "next/navigation";
 import { desc } from "drizzle-orm";
 import { ShieldCheck, UsersRound } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePageAuth } from "@/lib/auth";
 import {
   canManageUsers,
   normalizeUserRole,
   roleLabels,
   userRoles,
 } from "@/lib/auth/permissions";
-import { db, schema } from "@/lib/db";
+import { schema } from "@/lib/db";
+import { getRequestContext } from "@/lib/tenants/server";
 import UserRoleSelect from "@/components/UserRoleSelect";
 
 function formatDate(date: Date) {
@@ -20,7 +21,8 @@ function formatDate(date: Date) {
 }
 
 export default async function PermissionsPage() {
-  const currentUser = await getCurrentUser();
+  const currentUser = await requirePageAuth();
+  const { db } = await getRequestContext();
   if (!currentUser) {
     redirect("/login");
   }
