@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { NextResponse } from "next/server";
+import { injectStorageCompatibility } from "./storage";
 
 const contentTypes: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -749,7 +750,7 @@ export async function servePrototype(
   const rawBody = fs.readFileSync(filePath);
   const body =
     ext === ".html" || ext === ".htm"
-      ? Buffer.from(injectAnnotationAgent(decodeHtmlBody(rawBody)), "utf-8")
+      ? Buffer.from(injectAnnotationAgent(injectStorageCompatibility(decodeHtmlBody(rawBody))), "utf-8")
       : rawBody;
 
   return new NextResponse(new Uint8Array(body), {

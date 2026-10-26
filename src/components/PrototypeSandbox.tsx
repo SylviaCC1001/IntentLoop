@@ -1,5 +1,6 @@
 "use client";
 
+import { injectStorageCompatibility } from "@/lib/prototypes/storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -919,7 +920,7 @@ export default function PrototypeSandbox({
                 allowFullScreen
                 onLoad={handleFrameLoad}
                 src={previewUrl || undefined}
-                srcDoc={previewUrl ? undefined : previewHtml || "暂无原型内容"}
+                srcDoc={previewUrl ? undefined : injectStorageCompatibility(previewHtml || "暂无原型内容")}
                 className="h-full w-full bg-white"
               />
 
